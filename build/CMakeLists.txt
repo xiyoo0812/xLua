@@ -15,6 +15,8 @@ endif ()
 
 project(XLua)
 
+set(CMAKE_CXX_STANDARD 17)
+
 if ( IOS )
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fembed-bitcode")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fembed-bitcode")
@@ -41,6 +43,71 @@ set ( LUA_IDSIZE 120 CACHE STRING "gives the maximum size for the description of
 
 configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
+# common headers
+list(APPEND THIRDPART_INC  fmt/include)
+list(APPEND THIRDPART_INC  luakit/include)
+
+add_definitions(-DFMT_HEADER_ONLY)
+add_definitions(-DWOLFSSL_LIB)
+add_definitions(-DWOLFSSL_SRTP)
+add_definitions(-DWOLFSSL_NO_SOCK)
+add_definitions(-DWOLFSSL_USER_IO)
+add_definitions(-DWOLFSSL_USER_SETTINGS)
+
+if (APPLE)
+add_definitions(-DWOLFSSL_APPLE_NATIVE_CERT_VALIDATION)
+set(CMAKE_LD_FLAGS "-framework CoreFoundation")
+set(CMAKE_LD_FLAGS "-framework Security")
+endif ()
+
+#begin luapb
+set (LUAPB_SRC luapb/src/luapb.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUAPB_SRC})
+#end luapb
+
+#begin ljson
+set (LJSON_SRC ljson/src/ljson.cpp ljson/src/yyjson.c)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LJSON_SRC})
+#end ljson
+
+#begin lcodec
+set (LCODEC_SRC lcodec/src/lcodec.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LCODEC_SRC})
+#end lcodec
+
+#begin ltimer
+set (LTIMER_SRC ltimer/src/ltimer.cpp)
+ set (THIRDPART_SRC ${THIRDPART_SRC} ${LTIMER_SRC})
+#end ltimer
+
+#begin lminiz
+set (LMINIZ_SRC lminiz/src/lminiz.cpp lminiz/src/miniz.c)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LMINIZ_SRC})
+#end lminiz
+
+#begin lstdfs
+set (LSTDFS_SRC lstdfs/src/lstdfs.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LSTDFS_SRC})
+#end lstdfs
+
+#begin luabus
+file(GLOB_RECURSE LUABUS_SRC luabus/src/*.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
+#end luabus
+
+#begin lss
+set(SSL_PATH lssl/src/)
+file(GLOB_RECURSE LSSL_SRC ${SSL_PATH}ssl/*.cpp ${SSL_PATH}ssl/*.c ${SSL_PATH}wolfcrypt/src/*.c ${SSL_PATH}src/*.c)
+file(GLOB_RECURSE LSSL_SRC1 ${SSL_PATH}src/x509_str.c ${SSL_PATH}src/x509.c ${SSL_PATH}src/conf.c ${SSL_PATH}src/bio.c ${SSL_PATH}src/pk.c)
+file(GLOB_RECURSE LSSL_SRC2 ${SSL_PATH}src/ssl_bn.c ${SSL_PATH}src/ssl_misc.c ${SSL_PATH}src/ssl_asn1.c ${SSL_PATH}src/ssl_crypto.c ${SSL_PATH}src/ssl_certman.c)
+file(GLOB_RECURSE LSSL_SRC3 ${SSL_PATH}wolfcrypt/src/evp.c ${SSL_PATH}wolfcrypt/src/misc.c)
+list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC1})
+list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC2})
+list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC3})
+list(APPEND THIRDPART_INC  lssl/src)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LSSL_SRC})
+#end lssl
+
 include_directories(
     ${CMAKE_SOURCE_DIR}
     ${LUA_SRC_PATH}
@@ -59,7 +126,7 @@ set ( LUA_LIB )
 #   ${LUA_SRC_PATH}/liolib.c ${LUA_SRC_PATH}/lmathlib.c ${LUA_SRC_PATH}/loslib.c ${LUA_SRC_PATH}/lstrlib.c ${LUA_SRC_PATH}/ltablib.c ${LUA_SRC_PATH}/linit.c
 #   ${LUA_SRC_PATH}/lutf8lib.c ${LUA_SRC_PATH}/loadlib.c )
 
-list (APPEND memory_leak_checker.c)
+set ( XLUA_CORE i64lib.c xlua.c memory_leak_checker.c)
 
 macro(source_group_by_dir proj_dir source_files)
     if(MSVC OR APPLE)
@@ -80,6 +147,7 @@ endmacro(source_group_by_dir)
 
 source_group_by_dir(${CMAKE_CURRENT_SOURCE_DIR} LUA_CORE)
 source_group_by_dir(${CMAKE_CURRENT_SOURCE_DIR} LUA_LIB)
+source_group_by_dir(${CMAKE_CURRENT_SOURCE_DIR} XLUA_CORE)
 
 if (APPLE)
     if (IOS)
@@ -88,6 +156,7 @@ if (APPLE)
         add_library(xlua STATIC
            ${LUA_CORE}
            ${LUA_LIB}
+           ${XLUA_CORE}
            ${THIRDPART_SRC}
         )
 		set_xcode_property (xlua IPHONEOS_DEPLOYMENT_TARGET "7.0" "all")
@@ -99,6 +168,7 @@ if (APPLE)
             add_library(xlua SHARED
                 ${LUA_CORE}
                 ${LUA_LIB}
+                ${XLUA_CORE}
                 ${THIRDPART_SRC}
             )
         else ()
@@ -106,6 +176,7 @@ if (APPLE)
             add_library(xlua MODULE
                 ${LUA_CORE}
                 ${LUA_LIB}
+                ${XLUA_CORE}
                 ${THIRDPART_SRC}
             )
             set_target_properties ( xlua PROPERTIES BUNDLE TRUE )
@@ -117,6 +188,7 @@ elseif ("${CMAKE_SYSTEM_NAME}" STREQUAL "Switch")
     add_library(xlua STATIC
         ${LUA_CORE}
         ${LUA_LIB}
+        ${XLUA_CORE}
         ${THIRDPART_SRC}
     )
     target_compile_options(xlua PRIVATE -m64 -mcpu=cortex-a57+fp+simd+crypto+crc -fno-common -fno-short-enums -ffunction-sections -fdata-sections -fPIC -fms-extensions)
@@ -124,6 +196,7 @@ else ( )
     add_library(xlua SHARED
         ${LUA_CORE}
         ${LUA_LIB}
+        ${XLUA_CORE}
         ${THIRDPART_SRC}
     )
 endif ( )
