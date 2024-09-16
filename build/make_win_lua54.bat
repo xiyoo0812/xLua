@@ -1,5 +1,5 @@
 
-set "__VS=Visual Studio 16 2019"
+set "__VS=Visual Studio 17 2022"
 set "__VSWhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "__VSDISPLAY="
 set "__VSVER="
