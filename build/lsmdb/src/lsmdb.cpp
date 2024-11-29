@@ -18,8 +18,9 @@ namespace lsmdb {
             "open", &smdb_driver::open,
             "next", &smdb_driver::next,
             "first", &smdb_driver::first,
+            "flush", &smdb_driver::flush,
             "close", &smdb_driver::close,
-            "arrange", &smdb_driver::arrange,
+            "indexs", &smdb_driver::indexs,
             "set_codec", &smdb_driver::set_codec
         );
         return smdb;

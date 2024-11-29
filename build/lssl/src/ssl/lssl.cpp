@@ -6,13 +6,10 @@
 
 #include "lssl.h"
 
+#define HEX(v,c) { char tmp = (char) c; if (tmp >= '0' && tmp <= '9') { v = tmp-'0'; } else { v = tmp - 'a' + 10; } }
+
 namespace lssl {
-    static char fromhex(unsigned char x) {
-        if (x >= 'A' && x <= 'Z') return x - 'A' + 10;
-        else if (x >= 'a' && x <= 'z') return x - 'a' + 10;
-        else if (x >= '0' && x <= '9') return x - '0';
-        else return x;
-    }
+    thread_local luakit::luabuf thread_buff;
 
     static void hash(const char* str, int sz, char key[8]) {
         long djb_hash = 5381L;
@@ -91,8 +88,9 @@ namespace lssl {
         }
         size_t i;
         for (i = 0; i < sz; i += 2) {
-            char hi = fromhex(text[i]);
-            char low = fromhex(text[i + 1]);
+            char hi, low;
+            HEX(hi, text[i]);
+            HEX(low, text[i + 1]);
             if (hi > 16 || low > 16) {
                 return luaL_error(L, "Invalid hex text: %s", text);
             }
@@ -352,11 +350,10 @@ namespace lssl {
         return 1;
     }
 
-    static tlscodec* tls_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static tlscodec* tls_codec(codec_base* codec) {
         tlscodec* tcodec = new tlscodec();
-        tcodec->set_buff(kit_state.get_buff());
         tcodec->set_codec(codec);
+        tcodec->set_buff(&thread_buff);
         return tcodec;
     }
 

@@ -2,14 +2,22 @@
 
 #include <chrono>
 #include <iostream>
+
+#if defined(__NINTENDO__)
+#include "filesystem.hpp"
+using namespace ghc::filesystem;
+using fspath = ghc::filesystem::path;
+#else
 #include <filesystem>
+using namespace std::filesystem;
+using fspath = std::filesystem::path;
+#endif
+
 #include "lua_kit.h"
 
 using namespace std;
 using namespace luakit;
 using namespace std::chrono;
-using namespace std::filesystem;
-using fspath = std::filesystem::path;
 
 namespace lstdfs {
 
@@ -68,7 +76,9 @@ namespace lstdfs {
 
     int lstdfs_copy(lua_State* L, string_view from, string_view to, copy_options option) {
         try {
+#ifndef __NINTENDO__
             filesystem::copy(from, to, option);
+#endif
             return variadic_return(L, true);
         }
         catch (filesystem_error const& e) {
@@ -145,6 +155,10 @@ namespace lstdfs {
 
     string lstdfs_make_preferred(string_view path) {
         return fspath(path).make_preferred().string();
+    }
+
+    size_t lstdfs_file_size(string_view path) {
+        return file_size(path);
     }
 
     string lstdfs_stem(string_view path) {
@@ -252,6 +266,7 @@ namespace lstdfs {
         lstdfs.set_function("filetype", lstdfs_filetype);
         lstdfs.set_function("filename", lstdfs_filename);
         lstdfs.set_function("copy_file", lstdfs_copy_file);
+        lstdfs.set_function("file_size", lstdfs_file_size);
         lstdfs.set_function("extension", lstdfs_extension);
         lstdfs.set_function("root_name", lstdfs_root_name);
         lstdfs.set_function("root_path", lstdfs_root_path);

@@ -316,18 +316,17 @@ static int lpb_hexchar(char ch) {
 static uint64_t lpb_tointegerx(lua_State *L, int idx, int *isint) {
     int neg = 0;
     const char *s, *os;
-#if LUA_VERSION_NUM >= 503
-    uint64_t v = (uint64_t)lua_tointegerx(L, idx, isint);
-    if (*isint) return v;
-#else
     uint64_t v = 0;
+#if LUA_VERSION_NUM >= 503
+    v = (uint64_t)lua_tointegerx(L, idx, isint);
+    if (*isint) return v;
+#endif
     lua_Number nv = lua_tonumberx(L, idx, isint);
     if (*isint) {
         if (nv < (lua_Number)INT64_MIN || nv > (lua_Number)INT64_MAX)
             luaL_error(L, "number has no integer representation");
         return (uint64_t)(int64_t)nv;
     }
-#endif
     if ((os = s = lua_tostring(L, idx)) == NULL) return 0;
     while (*s == '#' || *s == '+' || *s == '-')
         neg = (*s == '-') ^ neg, ++s;
@@ -537,9 +536,11 @@ static void lpb_readtype(lua_State *L, lpb_State *LS, int type, pb_Slice *s) {
 
 /* io routines */
 
-#ifdef _WIN32
+#if defined(WIN32) | defined(_GAMING_XBOX)
 # include <io.h>
 # include <fcntl.h>
+# define fileno _fileno
+# define setmode _setmode
 #else
 # define setmode(a,b)  ((void)0)
 #endif
@@ -2196,4 +2197,3 @@ PB_NS_END
 /* cc: flags+='-O3 -ggdb -pedantic -std=c90 -Wall -Wextra'
  * maccc: flags+='-ggdb -shared -undefined dynamic_lookup' output='pb.so'
  * win32cc: flags+='-s -mdll -DLUA_BUILD_AS_DLL ' output='pb.dll' libs+='-llua54' */
-

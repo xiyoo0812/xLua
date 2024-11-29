@@ -5,7 +5,7 @@
 
 #include "lua_kit.h"
 
-#ifdef WIN32
+#ifdef _MSC_VER
 #define strncasecmp _strnicmp
 #endif
 
@@ -96,7 +96,8 @@ namespace lcodec {
                 if (pos != string_view::npos) {
                     string_view key = header.substr(0, pos);
                     header.remove_prefix(pos + 1);
-                    header.remove_prefix(header.find_first_not_of(" "));
+                    size_t hpos = header.find_first_not_of(" ");
+                    if (hpos != string_view::npos) header.remove_prefix(hpos);
                     if (!strncasecmp(key.data(), "Content-Length", key.size())) {
                         contentlenable = true;
                         mslice = m_buf->get_slice();

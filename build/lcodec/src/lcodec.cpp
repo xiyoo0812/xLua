@@ -4,46 +4,37 @@
 
 namespace lcodec {
 
-    static codec_base* rds_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* rds_codec(codec_base* codec) {
         rdscodec* rcodec = new rdscodec();
-        rcodec->set_buff(kit_state.get_buff());
         rcodec->set_codec(codec);
+        rcodec->set_buff(luakit::get_buff());
         return rcodec;
     }
 
-    static codec_base* wss_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* wss_codec(codec_base* codec) {
         wsscodec* wcodec = new wsscodec();
-        wcodec->set_buff(kit_state.get_buff());
         wcodec->set_codec(codec);
+        wcodec->set_buff(luakit::get_buff());
         return wcodec;
     }
 
-    static bitset* bitset_new() {
-        return new bitset();
-    }
-
-    static codec_base* httpd_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* httpd_codec(codec_base* codec) {
         httpcodec* hcodec = new httpdcodec();
-        hcodec->set_buff(kit_state.get_buff());
         hcodec->set_codec(codec);
+        hcodec->set_buff(luakit::get_buff());
         return hcodec;
     }
 
-    static codec_base* httpc_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* httpc_codec(codec_base* codec) {
         httpcodec* hcodec = new httpccodec();
-        hcodec->set_buff(kit_state.get_buff());
         hcodec->set_codec(codec);
+        hcodec->set_buff(luakit::get_buff());
         return hcodec;
     }
 
-    static codec_base* mysql_codec(lua_State* L, size_t session_id) {
-        luakit::kit_state kit_state(L);
+    static codec_base* mysql_codec(size_t session_id) {
         mysqlscodec* codec = new mysqlscodec(session_id);
-        codec->set_buff(kit_state.get_buff());
+        codec->set_buff(luakit::get_buff());
         return codec;
     }
 
@@ -72,20 +63,36 @@ namespace lcodec {
         llcodec.set_function("wsscodec", wss_codec);
         llcodec.set_function("url_encode", url_encode);
         llcodec.set_function("url_decode", url_decode);
-        llcodec.set_function("bitset", bitset_new);
-        kit_state.new_class<bitset>(
-            "get", &bitset::get,
-            "set", &bitset::set,
-            "hex", &bitset::hex,
-            "load", &bitset::load,
-            "flip", &bitset::flip,
-            "reset", &bitset::reset,
-            "check", &bitset::check,
-            "binary", &bitset::binary,
-            "loadhex", &bitset::loadhex,
-            "loadbin", &bitset::loadbin,
-            "tostring", &bitset::tostring
-        );
+        llcodec.set_function("bit32_new", lua_bitset_new<32>);
+        llcodec.set_function("bit64_new", lua_bitset_new<64>);
+        llcodec.set_function("bit128_new", lua_bitset_new<128>);
+        llcodec.set_function("bit256_new", lua_bitset_new<256>);
+        llcodec.set_function("bit512_new", lua_bitset_new<512>);
+        llcodec.set_function("bit32_get", lua_bitset_get<32>);
+        llcodec.set_function("bit64_get", lua_bitset_get<64>);
+        llcodec.set_function("bit128_get", lua_bitset_get<128>);
+        llcodec.set_function("bit256_get", lua_bitset_get<256>);
+        llcodec.set_function("bit512_get", lua_bitset_get<512>);
+        llcodec.set_function("bit32_set", lua_bitset_set<32>);
+        llcodec.set_function("bit64_set", lua_bitset_set<64>);
+        llcodec.set_function("bit128_set", lua_bitset_set<128>);
+        llcodec.set_function("bit256_set", lua_bitset_set<256>);
+        llcodec.set_function("bit512_set", lua_bitset_set<512>);
+        llcodec.set_function("bit32_flip", lua_bitset_flip<32>);
+        llcodec.set_function("bit64_flip", lua_bitset_flip<64>);
+        llcodec.set_function("bit128_flip", lua_bitset_flip<128>);
+        llcodec.set_function("bit256_flip", lua_bitset_flip<256>);
+        llcodec.set_function("bit512_flip", lua_bitset_flip<512>);
+        llcodec.set_function("bit32_reset", lua_bitset_reset<32>);
+        llcodec.set_function("bit64_reset", lua_bitset_reset<64>);
+        llcodec.set_function("bit128_reset", lua_bitset_reset<128>);
+        llcodec.set_function("bit256_reset", lua_bitset_reset<256>);
+        llcodec.set_function("bit512_reset", lua_bitset_reset<512>);
+        llcodec.set_function("bit32_check", lua_bitset_check<32>);
+        llcodec.set_function("bit64_check", lua_bitset_check<64>);
+        llcodec.set_function("bit128_check", lua_bitset_check<128>);
+        llcodec.set_function("bit256_check", lua_bitset_check<256>);
+        llcodec.set_function("bit512_check", lua_bitset_check<512>);
         return llcodec;
     }
 }
