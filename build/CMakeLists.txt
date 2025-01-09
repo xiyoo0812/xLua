@@ -95,6 +95,11 @@ file(GLOB_RECURSE LUABUS_SRC luabus/src/*.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
 #end luabus
 
+#begin lsmdb
+set (LSMDB_SRC lsmdb/src/zstd.c lsmdb/src/lsmdb.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LSMDB_SRC})
+#end lsmdb
+
 #begin lss
 set(SSL_PATH lssl/src/)
 file(GLOB_RECURSE LSSL_SRC ${SSL_PATH}ssl/*.cpp ${SSL_PATH}ssl/*.c ${SSL_PATH}wolfcrypt/src/*.c ${SSL_PATH}src/*.c)
