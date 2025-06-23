@@ -19,6 +19,9 @@ using namespace std;
 using namespace luakit;
 using namespace std::chrono;
 
+#include <locale>
+#include <codecvt>
+
 namespace lstdfs {
 
     struct file_info {
@@ -27,6 +30,24 @@ namespace lstdfs {
     };
     using path_vector = vector<string>;
     using file_vector = vector<file_info*>;
+
+    std::string from_utf8(std::string utf8_str) {
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_converter;
+        std::wstring wide_str = utf8_converter.from_bytes(utf8_str);
+        std::wstring_convert<std::codecvt<wchar_t, char, std::mbstate_t>> mb_converter(
+            new std::codecvt<wchar_t, char, std::mbstate_t>("zh-CN") // Windows 简体中文环境
+        );;
+        return mb_converter.to_bytes(wide_str);
+    }
+
+    std::string to_utf8(std::string mbcs_str) {
+        std::wstring_convert<std::codecvt<wchar_t, char, std::mbstate_t>> mb_converter(
+            new std::codecvt<wchar_t, char, std::mbstate_t>("zh-CN") // Windows 简体中文环境
+        );
+        std::wstring wide_str = mb_converter.from_bytes(mbcs_str);
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        return converter.to_bytes(wide_str);
+    }
 
     string lstdfs_absolute(string_view path) {
         return absolute(path).string();
@@ -211,7 +232,7 @@ namespace lstdfs {
             file_vector files;
             if (recursive) {
                 for (auto entry : recursive_directory_iterator(path)) {
-                    files.push_back(new file_info({ entry.path().string(), get_file_type(entry.path())}));
+                    files.push_back(new file_info({ entry.path().string(), get_file_type(entry.path()) }));
                 }
                 return variadic_return(L, files);
             }
@@ -250,6 +271,8 @@ namespace lstdfs {
             "create_hard_links", copy_options::create_hard_links,
             "overwrite_existing", copy_options::overwrite_existing
         );
+        lstdfs.set_function("to_utf8", to_utf8);
+        lstdfs.set_function("from_utf8", from_utf8);
         lstdfs.set_function("dir", lstdfs_dir);
         lstdfs.set_function("stem", lstdfs_stem);
         lstdfs.set_function("copy", lstdfs_copy);

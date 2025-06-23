@@ -42,7 +42,7 @@ namespace smdb {
             m_values.clear();
             m_indexs.clear();
             auto file = fopen(path, "rb");
-            if (!file) return true;
+            if (!file) return false;
             bool ok = read(file);
             fclose(file);
             return ok;
@@ -217,7 +217,7 @@ namespace smdb {
                 if (offset + sizeof(uint32_t) > zsize)  return false;
                 uint32_t size = *(uint32_t*)(zbuf + offset);
                 uint8_t ksz = size >> 24;
-                uint16_t vsz = size & MAX_VAL_SIZE;
+                uint32_t vsz = size & MAX_VAL_SIZE;
                 if (offset + ksz + vsz + sizeof(uint32_t) > zsize)  return false;
                 string key = string(zbuf + offset + sizeof(uint32_t), ksz);
                 put(key, string_view(zbuf + offset + sizeof(uint32_t) + ksz, vsz));

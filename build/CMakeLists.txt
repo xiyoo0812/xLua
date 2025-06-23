@@ -100,6 +100,12 @@ set (LSMDB_SRC lsmdb/src/zstd.c lsmdb/src/lsmdb.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSMDB_SRC})
 #end lsmdb
 
+#begin lualog
+file (GLOB_RECURSE LUALOG_SRC lualog/lualog/*.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUALOG_SRC})
+#end lualog
+
+
 #begin lss
 set(SSL_PATH lssl/src/)
 file(GLOB_RECURSE LSSL_SRC ${SSL_PATH}ssl/*.cpp ${SSL_PATH}ssl/*.c ${SSL_PATH}wolfcrypt/src/*.c ${SSL_PATH}src/*.c)
