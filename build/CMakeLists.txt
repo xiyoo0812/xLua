@@ -15,7 +15,7 @@ endif ()
 
 project(XLua)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 if ( IOS )
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fembed-bitcode")
@@ -44,7 +44,6 @@ set ( LUA_IDSIZE 120 CACHE STRING "gives the maximum size for the description of
 configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
 # common headers
-list(APPEND THIRDPART_INC  fmt/include)
 list(APPEND THIRDPART_INC  luakit/include)
 
 add_definitions(-DFMT_HEADER_ONLY)
@@ -89,6 +88,11 @@ set (THIRDPART_SRC ${THIRDPART_SRC} ${LMINIZ_SRC})
 set (LSTDFS_SRC lstdfs/src/lstdfs.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSTDFS_SRC})
 #end lstdfs
+
+#begin lworker
+file(GLOB_RECURSE LWORKER_SRC lworker/src/*.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LWORKER_SRC})
+#end lworker
 
 #begin luabus
 file(GLOB_RECURSE LUABUS_SRC luabus/src/*.cpp)

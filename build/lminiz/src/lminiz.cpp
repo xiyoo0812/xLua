@@ -1,12 +1,91 @@
 #define LUA_LIB
 
-#include "miniz.h"
 #include "lminiz.h"
+
+#define	MINI_GZ_MIN(a, b)	((a) < (b) ? (a) : (b))
 
 namespace lminiz {
 
-    thread_local mz_zip_archive tarchive;
+    inline uint8_t* alloc_buff(size_t sz) {
+        auto buf = luakit::get_buff();
+        return buf->peek_space(sz);
+    }
 
+    int mini_gz_init(struct mini_gzip* gz_ptr, uint8_t* mem, size_t mem_len) {
+        uint8_t* mem8_ptr = mem;
+        uint8_t* hptr = mem8_ptr + 0;		// .gz header
+        uint8_t* hauxptr = mem8_ptr + 10;	// auxillary header
+
+        gz_ptr->hdr_ptr = hptr;
+        gz_ptr->data_ptr = 0;
+        gz_ptr->data_len = 0;
+        gz_ptr->total_len = mem_len;
+        gz_ptr->chunk_size = 1024;
+
+        if (hptr[0] != 0x1F || hptr[1] != 0x8B) {
+            return MZ_STREAM_ERROR;
+        }
+        if (hptr[2] != 8) {
+            return MZ_STREAM_ERROR;
+        }
+        if (hptr[3] & 0x4) {
+            uint16_t fextra_len = hauxptr[1] << 8 | hauxptr[0];
+            gz_ptr->fextra_len = fextra_len;
+            hauxptr += 2;
+            gz_ptr->fextra_ptr = hauxptr;
+        }
+        if (hptr[3] & 0x8) {
+            gz_ptr->fname_ptr = hauxptr;
+            while (*hauxptr != '\0') {
+                hauxptr++;
+            }
+            hauxptr++;
+        }
+        if (hptr[3] & 0x10) {
+            gz_ptr->fcomment_ptr = hauxptr;
+            while (*hauxptr != '\0') {
+                hauxptr++;
+            }
+            hauxptr++;
+        }
+        if (hptr[3] & 0x2) /* FCRC */ {
+            gz_ptr->fcrc = (*(uint16_t*)hauxptr);
+            hauxptr += 2;
+        }
+        gz_ptr->data_ptr = hauxptr;
+        gz_ptr->data_len = mem_len - (hauxptr - hptr);
+        return MZ_OK;
+    }
+
+    int mini_gz_unpack(struct mini_gzip* gz_ptr, uint8_t* mem_out, size_t* mem_out_len) {
+        z_stream s;
+        memset(&s, 0, sizeof(z_stream));
+        inflateInit2(&s, -MZ_DEFAULT_WINDOW_BITS);
+        int in_bytes_avail = gz_ptr->data_len;
+        s.avail_out = *mem_out_len;
+        s.next_in = gz_ptr->data_ptr;
+        s.next_out = mem_out;
+        for (;;) {
+            int bytes_to_read = MINI_GZ_MIN(gz_ptr->chunk_size, in_bytes_avail);
+            s.avail_in += bytes_to_read;
+            int ret = mz_inflate(&s, MZ_SYNC_FLUSH);
+            if (ret == MZ_STREAM_END) {
+                break;
+            }
+            in_bytes_avail -= bytes_to_read;
+            if (s.avail_out == 0 && in_bytes_avail != 0) {
+                return MZ_MEM_ERROR;
+            }
+            if (ret != MZ_OK) {
+                return ret;
+            }
+        }
+        *mem_out_len = s.total_out;
+        return inflateEnd(&s);
+    }
+
+
+    static zip_file zfile;
     static int find_zip_file(lua_State* L, std::string filename) {
         size_t start_pos = 0;
         luakit::lua_guard g(L);
@@ -28,9 +107,10 @@ namespace lminiz {
             start_pos += strlen("/");
         }
         size_t cur = 0, pos = 0;
+        mz_zip_archive* archive = zfile.archive();
         while ((pos = path.find(LUA_PATH_SEP, cur)) != std::string::npos) {
             std::string sub = path.substr(cur, pos - cur);
-            int index = mz_zip_reader_locate_file(&tarchive, sub.c_str(), nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
+            int index = mz_zip_reader_locate_file(archive, sub.c_str(), nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
             if (index > 0) {
                 return index;
             }
@@ -38,21 +118,20 @@ namespace lminiz {
         }
         if (path.size() > cur) {
             std::string sub = path.substr(cur);
-            return mz_zip_reader_locate_file(&tarchive, sub.c_str(), nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
+            return mz_zip_reader_locate_file(archive, sub.c_str(), nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
         }
         return -1;
     }
 
     bool zip_exist(const char* fname) {
-        return mz_zip_reader_locate_file(&tarchive, fname, nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE) > 0;
+        return mz_zip_reader_locate_file(zfile.archive(), fname, nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE) > 0;
     }
 
-    static int zip_load(lua_State* L) {
-        const char* fname = luaL_optstring(L, 1, nullptr);
-        int index = mz_zip_reader_locate_file(&tarchive, fname, nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
+    static int zip_read(lua_State* L, const char* fname) {
+        int index = mz_zip_reader_locate_file(zfile.archive(), fname, nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
         if (index <= 0) return 0;
         size_t size = 0;
-        const char* data = (const char*)mz_zip_reader_extract_to_heap(&tarchive, index, &size, MZ_ZIP_FLAG_CASE_SENSITIVE);
+        const char* data = (const char*)mz_zip_reader_extract_to_heap(zfile.archive(), index, &size, MZ_ZIP_FLAG_CASE_SENSITIVE);
         if (!data) return 0;
         lua_pushlstring(L, data, size);
         delete[] data;
@@ -61,7 +140,7 @@ namespace lminiz {
 
     static int load_zip_data(lua_State* L, const char* filename, int index) {
         size_t size = 0;
-        const char* data = (const char*)mz_zip_reader_extract_to_heap(&tarchive, index, &size, MZ_ZIP_FLAG_CASE_SENSITIVE);
+        const char* data = (const char*)mz_zip_reader_extract_to_heap(zfile.archive(), index, &size, MZ_ZIP_FLAG_CASE_SENSITIVE);
         if (!data) {
             lua_pushstring(L, "file read failed!");
             return LUA_ERRERR;
@@ -73,7 +152,7 @@ namespace lminiz {
 
     static int load_zip_file(lua_State* L) {
         const char* fname = luaL_optstring(L, 1, nullptr);
-        int index = mz_zip_reader_locate_file(&tarchive, fname, nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
+        int index = mz_zip_reader_locate_file(zfile.archive(), fname, nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE);
         if (index <= 0) {
             luaL_Buffer buf;
             luaL_buffinit(L, &buf);
@@ -85,16 +164,8 @@ namespace lminiz {
         return load_zip_data(L, fname, index);
     }
 
-    static void close_zip() {
-        if (tarchive.m_pState) {
-            mz_zip_reader_end(&tarchive);
-            mz_zip_zero_struct(&tarchive);
-        }
-    }
-
-    bool init_zip(lua_State* L, const char* zfile) {
-        close_zip();
-        if (!mz_zip_reader_init_file(&tarchive, zfile, 0)) {
+    bool load_zip(lua_State* L, const char* zipfile) {
+        if (!zfile.open(zipfile)) {
             return false;
         }
         luakit::kit_state lua(L);
@@ -142,11 +213,33 @@ namespace lminiz {
         return true;
     }
 
+    static int gzip_decode(lua_State* L, std::string_view src) {
+        size_t src_size = src.size();
+        size_t dst_size = src_size * 5;
+        auto output = alloc_buff(dst_size);
+        if (output == nullptr) {
+            luaL_error(L, "Failed to allocate output buffer.");
+        }
+        struct mini_gzip gz;
+        int ret = mini_gz_init(&gz, (uint8_t*)src.data(), src_size);
+        if (ret != MZ_OK) {
+            luaL_error(L, "Failed to init gzip header! err: %d", ret);
+        }
+        ret = mini_gz_unpack(&gz, output, &dst_size);
+        if (ret != MZ_OK) {
+            luaL_error(L, "Failed to unpack gzip! err: %d", ret);
+        }
+        lua_pushlstring(L, (char*)output, dst_size);
+        return 1;
+    }
+
     luakit::lua_table open_lminiz(lua_State* L) {
         luakit::kit_state kit_state(L);
         luakit::lua_table miniz = kit_state.new_table("zip");
         miniz.set_function("exist", zip_exist);
-        miniz.set_function("load", [](lua_State* L) { return zip_load(L); });
+        miniz.set_function("read", zip_read);
+        miniz.set_function("load", load_zip);
+        miniz.set_function("gzip_decode", gzip_decode);
         return miniz;
     }
 }
@@ -156,13 +249,4 @@ extern "C" {
         auto miniz = lminiz::open_lminiz(L);
         return miniz.push_stack();
     }
-
-    LUALIB_API bool lua_initzip(lua_State* L, const char* zfile) {
-        return lminiz::init_zip(L, zfile);
-    }
-
-    LUALIB_API void lua_closezip() {
-        lminiz::close_zip();
-    }
-    
 }

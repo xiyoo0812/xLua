@@ -2,6 +2,7 @@
 #pragma once
 
 #include <wolfssl/openssl/ssl.h>
+#include <wolfssl/openssl/pem.h>
 
 #include "lua_kit.h"
 
@@ -19,41 +20,35 @@ namespace lssl {
     class lua_rsa_key {
     public:
         ~lua_rsa_key () {
-            if (rsa) RSA_free(rsa);
+            close();
         }
 
-        bool init_pubkey(std::string_view& pkey) {
-            if (rsa) RSA_free(rsa);
-            size_t key_len = pkey.size();
-            uint32_t b64_len = BASE64_DECODE_OUT_SIZE(key_len);
-            unsigned char* b64_key = (unsigned char*)malloc(b64_len);
-            if (Base64_Decode((const unsigned char*)pkey.data(), key_len, b64_key, &b64_len) != 0) {
-                free(b64_key);
-                return false;
+        void close() {
+            if (rsa_pub) RSA_free(rsa_pub);
+            if (rsa_pri) RSA_free(rsa_pri);
+        }
+
+        bool set_pubkey(std::string_view pkey) {
+            if (rsa_pub) close();
+            BIO* bio = BIO_new_mem_buf(pkey.data(), pkey.size());
+            rsa_pub = PEM_read_bio_RSA_PUBKEY(bio, nullptr, nullptr, nullptr);
+            if (rsa_pub) rsa_sz = RSA_size(rsa_pub);
+            return rsa_pub != nullptr;
+        }
+
+        bool set_prikey(std::string_view pkey) {
+            if (rsa_pri) close();
+            BIO* bio = BIO_new_mem_buf(pkey.data(), pkey.size());
+            rsa_pri = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
+            if (rsa_pri) {
+                rsa_sz = RSA_size(rsa_pri);
+                rsa_pub = RSAPublicKey_dup(rsa_pri);
             }
-            rsa = d2i_RSAPublicKey(nullptr, (const unsigned char**)&b64_key, b64_len);
-            if (rsa) rsa_sz = RSA_size(rsa);
-            free(b64_key);
-            return rsa != nullptr;
+            return rsa_pri != nullptr;
         }
 
-        bool init_prikey(std::string_view& pkey) {
-            if (rsa) RSA_free(rsa);
-            size_t key_len = pkey.size();
-            uint32_t b64_len = BASE64_DECODE_OUT_SIZE(key_len);
-            unsigned char* b64_key = (unsigned char*)malloc(b64_len);
-            if (Base64_Decode((const unsigned char*)pkey.data(), key_len, b64_key, &b64_len) != 0) {
-                free(b64_key);
-                return false;
-            }
-            rsa = d2i_RSAPrivateKey(nullptr, (const unsigned char**)&b64_key, key_len);
-            if (rsa) rsa_sz = RSA_size(rsa);
-            free(b64_key);
-            return rsa != nullptr;
-        }
-
-        int pub_encode(lua_State* L, std::string_view value) {
-            if (rsa == nullptr) {
+        int encrypt(lua_State* L, std::string_view value) {
+            if (rsa_pub == nullptr) {
                 luaL_error(L, "rsa key not init!");
             }
             luaL_Buffer b;
@@ -63,7 +58,7 @@ namespace lssl {
             luaL_buffinitsize(L, &b, out_size);
             while (value_sz > 0) {
                 int in_sz = value_sz > RSA_ENCODE_LEN(rsa_sz) ? RSA_ENCODE_LEN(rsa_sz) : value_sz;
-                int len = RSA_public_encrypt(in_sz, value_p, (unsigned char*)buf, rsa, RSA_PKCS1_PADDING);
+                int len = RSA_public_encrypt(in_sz, value_p, (unsigned char*)buf, rsa_pub, RSA_PKCS1_PADDING);
                 if (len <= 0) {
                     luaL_error(L, "rsa pubkey encrypt failed!");
                 }
@@ -75,54 +70,38 @@ namespace lssl {
             return 1;
         }
 
-        int pub_decode(lua_State* L, std::string_view value) {
-            if (rsa == nullptr) {
+        int verify(lua_State* L, std::string_view value, std::string_view sig) {
+            if (rsa_pub == nullptr) {
                 luaL_error(L, "rsa pubkey not init!");
             }
-            luaL_Buffer b;
-            size_t value_sz = value.size();
-            size_t out_size = RSA_DECODE_OUT_SIZE(value_sz, rsa_sz);
+            uint32_t value_sz = value.size();
+            unsigned char hash[SHA256_DIGEST_LENGTH];
             unsigned char* value_p = (unsigned char*)value.data();
-            luaL_buffinitsize(L, &b, out_size);
-            while (value_sz > 0) {
-                int in_sz = value_sz > rsa_sz ? rsa_sz : value_sz;
-                int len = RSA_public_decrypt(in_sz, value_p, (unsigned char*)buf, rsa, RSA_PKCS1_PADDING);
-                if (len <= 0) {
-                    luaL_error(L, "rsa pubkey decode failed!");
-                }
-                value_p += in_sz;
-                value_sz -= in_sz;
-                luaL_addlstring(&b, buf, len);
-            }
-            luaL_pushresult(&b);
+            SHA256(value_p, value_sz, hash);
+            unsigned char* sig_p = (unsigned char*)sig.data();
+            int ret = RSA_verify(NID_sha256, hash, SHA256_DIGEST_LENGTH, sig_p, sig.size(), rsa_pub);
+            lua_pushboolean(L, ret);
             return 1;
         }
 
-        int pri_encode(lua_State* L, std::string_view value) {
-            if (rsa == nullptr) {
+        int sign(lua_State* L, std::string_view value) {
+            if (rsa_pri == nullptr) {
                 luaL_error(L, "rsa prikey not init!");
             }
-            luaL_Buffer b;
-            size_t value_sz = value.size();
-            size_t out_size = RSA_ENCODE_OUT_SIZE(value_sz, rsa_sz);
+            uint32_t value_sz = value.size();
+            unsigned char hash[SHA256_DIGEST_LENGTH];
             unsigned char* value_p = (unsigned char*)value.data();
-            luaL_buffinitsize(L, &b, out_size);
-            while (value_sz > 0) {
-                int in_sz = value_sz > RSA_ENCODE_LEN(rsa_sz) ? RSA_ENCODE_LEN(rsa_sz) : value_sz;
-                int len = RSA_private_encrypt(in_sz, value_p, (unsigned char*)buf, rsa, RSA_PKCS1_PADDING);
-                if (len <= 0) {
-                    luaL_error(L, "rsa prikey encode failed!");
-                }
-                value_p += in_sz;
-                value_sz -= in_sz;
-                luaL_addlstring(&b, buf, len);
+            SHA256(value_p, value_sz, hash);
+
+            if (RSA_sign(NID_sha256, hash, SHA256_DIGEST_LENGTH, (unsigned char*)buf, &value_sz, rsa_pri) != 1) {
+                luaL_error(L, "rsa prikey sign field!");
             }
-            luaL_pushresult(&b);
+            lua_pushlstring(L, (const char*)buf, value_sz);
             return 1;
         }
 
-        int pri_decode(lua_State* L, std::string_view value) {
-            if (rsa == nullptr) {
+        int decrypt(lua_State* L, std::string_view value) {
+            if (rsa_pri == nullptr) {
                 luaL_error(L, "rsa prikey not init!");
             }
             luaL_Buffer b;
@@ -132,7 +111,7 @@ namespace lssl {
             luaL_buffinitsize(L, &b, out_size);
             while (value_sz > 0) {
                 int in_sz = value_sz > rsa_sz ? rsa_sz : value_sz;
-                int len = RSA_private_decrypt(in_sz, value_p, (unsigned char*)buf, rsa, RSA_PKCS1_PADDING);
+                int len = RSA_private_decrypt(in_sz, value_p, (unsigned char*)buf, rsa_pri, RSA_PKCS1_PADDING);
                 if (len <= 0) {
                     luaL_error(L, "rsa prikey decode failed!");
                 }
@@ -145,7 +124,8 @@ namespace lssl {
         }
     private:
         size_t rsa_sz = 0;
-        RSA* rsa = nullptr;
+        RSA* rsa_pub = nullptr;
+        RSA* rsa_pri = nullptr;
         char buf[RSA_MAX_SIZE / 8];
     };
 
@@ -163,10 +143,12 @@ namespace lssl {
 
         virtual uint8_t* encode(lua_State* L, int index, size_t* len) {
             if (!is_handshake) {
+                m_buf->clean();
                 uint8_t* data = (uint8_t*)lua_tolstring(L, index, len);
                 if (*len > 0) bio_write(L, data, *len);
                 tls_handshake(L);
-                return m_buf->data(len);
+                data = m_buf->data(len);
+                return data;
             }
             size_t slen = 0;
             uint8_t* body = m_hcodec->encode(L, index, &slen);
@@ -181,7 +163,8 @@ namespace lssl {
                 slen -= written;
             }
             bio_read(L);
-            return m_buf->data(len);
+            body = m_buf->data(len);
+            return body;
         }
 
         virtual size_t decode(lua_State* L) {
@@ -191,21 +174,20 @@ namespace lssl {
                 lua_pushstring(L, "TLS");
                 lua_push_object(L, this);
                 lua_pushlstring(L, (const char*)m_slice->head(), sz);
-                m_slice->erase(sz);
                 m_packet_len = sz;
                 return lua_gettop(L) - top;
             }
             if (!is_recving) {
                 m_buf->clean();
             }
+            m_packet_len = sz;
             bio_write(L, m_slice->head(), sz);
             do {
                 uint8_t* outbuff = m_buf->peek_space(SSL_TLS_READ_SIZE);
                 int read = SSL_read(ssl, outbuff, SSL_TLS_READ_SIZE);
                 if (read == 0) break;
-                if (read < 0 || read > SSL_TLS_READ_SIZE) {
+                if (read < 0) {
                     int err = SSL_get_error(ssl, read);
-                    ERR_clear_error();
                     if (err == SSL_ERROR_WANT_READ) {
                         break;
                     }
@@ -213,11 +195,12 @@ namespace lssl {
                 }
                 m_buf->pop_space(read);
             } while (true);
-            m_slice->erase(sz);
-            m_hcodec->set_slice(m_buf->get_slice());
             is_recving = true;
-            m_packet_len = sz;
-            size_t argnum = m_hcodec->decode(L);
+            m_hcodec->set_slice(m_buf->get_slice());
+            if (m_hcodec->load_packet(m_buf->size()) == 0) {
+                throw std::length_error("http text not full");
+            }
+            int argnum = m_hcodec->decode(L);
             is_recving = false;
             return argnum;
         }
@@ -231,7 +214,7 @@ namespace lssl {
             m_hcodec = codec;
         }
 
-        int init_tls(lua_State* L, bool is_client) {
+        void init_tls(lua_State* L, bool is_client) {
             ctx = SSL_CTX_new(SSLv23_method());
             if (!ctx) {
                 char buf[256];
@@ -253,7 +236,6 @@ namespace lssl {
             else {
                 SSL_set_accept_state(ssl);
             }
-            return 0;
         }
 
         int set_ciphers(lua_State* L, std::string_view cipher) {
@@ -279,20 +261,14 @@ namespace lssl {
     protected:
         void tls_handshake(lua_State* L) {
             int ret = SSL_do_handshake(ssl);
-            if (ret == 1) {
-                m_buf->clean();
-                return;
-            }
-            if (ret < 0) {
-                int err = SSL_get_error(ssl, ret);
-                ERR_clear_error();
-                if (err == SSL_ERROR_WANT_READ) {
-                    bio_read(L);
-                }
+            if (ret == SSL_SUCCESS) {
                 return;
             }
             int err = SSL_get_error(ssl, ret);
-            ERR_clear_error();
+            if (err == SSL_ERROR_WANT_READ) {
+                bio_read(L);
+                return;
+            }
             luaL_error(L, "SSL_do_handshake error:%d ret:%d", err, ret);
         }
 
@@ -308,7 +284,6 @@ namespace lssl {
         }
 
         void bio_read(lua_State* L) {
-            m_buf->clean();
             int pending = BIO_ctrl_pending(out_bio);
             while (pending > 0) {
                 uint8_t* outbuff = m_buf->peek_space(SSL_TLS_READ_SIZE);

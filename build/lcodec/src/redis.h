@@ -1,13 +1,8 @@
 #pragma once
 #include <deque>
-#include <string>
-
-#ifdef WIN32
-#define strncasecmp _strnicmp
-#endif
+#include <charconv>
 
 #include "lua_kit.h"
-#include "fmt/core.h"
 
 using namespace std;
 using namespace luakit;
@@ -27,11 +22,11 @@ namespace lcodec {
             m_buf->clean();
             int n = lua_gettop(L);
             uint32_t session_id = lua_tointeger(L, index++);
-            m_buf->write(fmt::format("*{}\r\n", n - index + 1));
+            m_buf->write(std::format("*{}\r\n", n - index + 1));
             for (int i = index; i <= n; ++i) {
                 encode_bulk_string(L, i);
             }
-            sessions.push_back(session_id);
+            m_sessions.push_back(session_id);
             return m_buf->data(len);
         }
 
@@ -39,11 +34,10 @@ namespace lcodec {
             int top = lua_gettop(L);
             size_t osize = m_slice->size();
             string_view buf = m_slice->contents();
-            lua_pushinteger(L, sessions.empty() ? 0 : sessions.front());
+            lua_pushinteger(L, m_sessions.empty() ? 0 : m_sessions.front());
             parse_redis_packet(L, buf);
-            if (!sessions.empty()) sessions.pop_front();
+            if (!m_sessions.empty()) m_sessions.pop_front();
             m_packet_len = osize - buf.size();
-            m_slice->erase(m_packet_len);
             return lua_gettop(L) - top;
         }
 
@@ -68,19 +62,17 @@ namespace lcodec {
         }
 
         void parse_redis_string(lua_State* L, string_view line, string_view& buf, bool rootable = false) {
-            int64_t length = atoll(line.data());
-            if (length >= 0) {
+            if (int64_t length = atoll(line.data()); length >= 0) {
                 string_view nline;
                 if (!read_line(buf, nline))
                     throw length_error("redis text not full");
-                if (!strncasecmp(nline.data(), "[js]", 4)) {
+                if (nline.starts_with("[js]")) {
                     nline.remove_prefix(4);
                     m_jcodec->decode(L, (uint8_t*)nline.data(), nline.size());
                 } else {
                     lua_pushlstring(L, nline.data(), nline.size());
                 }
-            }
-            else {
+            } else {
                 lua_pushnil(L);
             }
             if (rootable) {
@@ -90,8 +82,7 @@ namespace lcodec {
         }
 
         void parse_redis_array(lua_State* L, string_view line, string_view& buf, bool rootable = false) {
-            int64_t length = atoll(line.data());
-            if (length >= 0) {
+            if (int64_t length = atoll(line.data()); length >= 0) {
                 lua_createtable(L, 0, 4);
                 for (int i = 1; i <= length; ++i) {
                     string_view line;
@@ -148,8 +139,7 @@ namespace lcodec {
         }
 
         bool read_line(string_view& buf, string_view& line) {
-            size_t pos = buf.find(RDS_CRLF);
-            if (pos != string_view::npos) {
+            if (size_t pos = buf.find(RDS_CRLF); pos != string_view::npos) {
                 line = buf.substr(0, pos);
                 buf.remove_prefix(pos + CRLF_LEN);
                 return true;
@@ -158,30 +148,29 @@ namespace lcodec {
         }
 
         void number_encode(double value) {
-            auto svalue = std::to_string(value);
-            m_buf->write(fmt::format("${}\r\n{}\r\n", svalue.size(), svalue.c_str()));
+            auto res = to_chars(m_buffer, m_buffer + sizeof(m_buffer), value, chars_format::general, 25);
+            m_buf->write(std::format("${}\r\n{}\r\n", res.ptr - m_buffer, m_buffer));
         }
 
         void integer_encode(int64_t integer) {
-            auto svalue = std::to_string(integer);
-            m_buf->write(fmt::format("${}\r\n{}\r\n", svalue.size(), svalue.c_str()));
+            auto res = to_chars(m_buffer, m_buffer + sizeof(m_buffer), integer);
+            m_buf->write(std::format("${}\r\n{}\r\n", res.ptr - m_buffer, m_buffer));
         }
 
         void string_encode(lua_State* L, int idx) {
             size_t len;
             const char* data = lua_tolstring(L, idx, &len);
-            m_buf->write(fmt::format("${}\r\n{}\r\n", len, string_view(data, len)));
+            m_buf->write(std::format("${}\r\n{}\r\n", len, string_view(data, len)));
         }
 
         void table_encode(lua_State* L, int idx) {
             size_t len;
             char* body = (char*)m_jcodec->encode(L, idx, &len);
-            m_buf->write(fmt::format("${}\r\n[js]{}\r\n", len + 4, string_view(body, len)));
+            m_buf->write(std::format("${}\r\n[js]{}\r\n", len + 4, string_view(body, len)));
         }
 
         void encode_bulk_string(lua_State* L, int idx) {
-            int type = lua_type(L, idx);
-            switch (type) {
+            switch (lua_type(L, idx)) {
             case LUA_TSTRING:
                 string_encode(L, idx);
                 break;
@@ -201,7 +190,8 @@ namespace lcodec {
         }
 
     protected:
-        deque<uint32_t> sessions;
+        char m_buffer[64];
         codec_base* m_jcodec = nullptr;
+        deque<uint32_t> m_sessions;
     };
 }

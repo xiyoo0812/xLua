@@ -1,20 +1,14 @@
 ﻿#pragma once
 
-#include <set>
-#include <map>
-#include <list>
-#include <tuple>
 #include <mutex>
 #include <atomic>
 #include <string>
-#include <vector>
-#include <memory>
-#include <utility>
 #include <cstdint>
+#include <typeindex>
 #include <stdexcept>
 #include <functional>
 #include <type_traits>
-#include <string.h>
+#include <unordered_map>
 
 extern "C"
 {
@@ -31,11 +25,16 @@ namespace luakit {
     using error_fn = std::function<void(std::string_view err)>;
 
     template<typename T>
-    const char* lua_get_meta_name() {
-        thread_local char meta_name[MAX_LUA_META_KEY];
+    std::string lua_get_meta_name() {
         using OT = std::remove_cv_t<std::remove_pointer_t<T>>;
-        snprintf(meta_name, MAX_LUA_META_KEY, "__lua_class_meta_%zu__", typeid(OT).hash_code());
-        return meta_name;
+        auto type = std::type_index(typeid(OT));
+        static thread_local std::unordered_map<std::type_index, std::string> cache;
+        if (auto it = cache.find(type); it != cache.end()) {
+            return it->second;
+        }
+        auto name = std::format("__lua_class_meta_{}_{}__", type.name(), type.hash_code());
+        cache.emplace(type, name);
+        return name;
     }
 
     inline size_t lua_get_object_key(void* obj) {
@@ -94,7 +93,22 @@ namespace luakit {
         spin_mutex(const spin_mutex&) = delete;
         spin_mutex& operator = (const spin_mutex&) = delete;
         void lock() {
-            while(flag.test_and_set(std::memory_order_acquire));
+            for (;;) {
+                if (!flag.test_and_set(std::memory_order_relaxed)) {
+                    std::atomic_thread_fence(std::memory_order_acquire);
+                    break;
+                }
+                #if defined(_M_X64)
+                    _mm_pause();
+                #elif defined(__x86_64__)
+                    __builtin_ia32_pause();
+                #elif defined(__aarch64__)
+                    __builtin_arm_yield();
+                #endif
+            }
+        }
+        bool try_lock() {
+            return !flag.test_and_set(std::memory_order_acquire);
         }
         void unlock() {
             flag.clear(std::memory_order_release);

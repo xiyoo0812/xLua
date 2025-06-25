@@ -1,8 +1,7 @@
 #define LUA_LIB
 
 #include <chrono>
-#include <iostream>
-#include <filesystem>
+
 #include "lua_kit.h"
 
 using namespace std;
@@ -58,6 +57,16 @@ namespace lstdfs {
                 auto size = remove_all(path);
                 return variadic_return(L, size > 0);
             }
+            bool res = remove(path);
+            return variadic_return(L, res);
+        }
+        catch (filesystem_error const& e) {
+            return variadic_return(L, false, e.what());
+        }
+    }
+
+    int lstdfs_remove_file(lua_State* L, string_view path) {
+        try {
             bool res = remove(path);
             return variadic_return(L, res);
         }
@@ -123,6 +132,10 @@ namespace lstdfs {
         return fspath(path).relative_path().string();
     }
 
+    string lstdfs_relative(string_view path, string_view base) {
+        return relative(path, base).string();
+    }
+
     string lstdfs_append(string_view path, string_view append_path) {
         return fspath(path).append(append_path).string();
     }
@@ -145,6 +158,10 @@ namespace lstdfs {
 
     string lstdfs_make_preferred(string_view path) {
         return fspath(path).make_preferred().string();
+    }
+
+    size_t lstdfs_file_size(string_view path) {
+        return file_size(path);
     }
 
     string lstdfs_stem(string_view path) {
@@ -172,8 +189,7 @@ namespace lstdfs {
     }
 
     string get_file_type(fspath path) {
-        file_status s = status(path);
-        switch (s.type()) {
+        switch (auto s = status(path); s.type()) {
         case file_type::none: return "none";
         case file_type::not_found: return "not_found";
         case file_type::regular: return "regular";
@@ -227,10 +243,10 @@ namespace lstdfs {
         lstdfs.new_enum("copy_options",
             "none", copy_options::none,
             "recursive", copy_options::recursive,
-            "recursive", copy_options::recursive,
-            "copy_symlinks", copy_options::copy_symlinks,
             "copy_symlinks", copy_options::copy_symlinks,
             "skip_symlinks", copy_options::skip_symlinks,
+            "skip_existing", copy_options::skip_existing,
+            "update_existing", copy_options::update_existing,
             "create_symlinks", copy_options::create_symlinks,
             "directories_only", copy_options::directories_only,
             "create_hard_links", copy_options::create_hard_links,
@@ -249,14 +265,17 @@ namespace lstdfs {
         lstdfs.set_function("concat", lstdfs_concat);
         lstdfs.set_function("temp_dir", lstdfs_temp_dir);
         lstdfs.set_function("absolute", lstdfs_absolute);
+        lstdfs.set_function("relative", lstdfs_relative);
         lstdfs.set_function("filetype", lstdfs_filetype);
         lstdfs.set_function("filename", lstdfs_filename);
         lstdfs.set_function("copy_file", lstdfs_copy_file);
+        lstdfs.set_function("file_size", lstdfs_file_size);
         lstdfs.set_function("extension", lstdfs_extension);
         lstdfs.set_function("root_name", lstdfs_root_name);
         lstdfs.set_function("root_path", lstdfs_root_path);
-        lstdfs.set_function("is_absolute", lstdfs_is_absolute);
         lstdfs.set_function("parent_path", lstdfs_parent_path);
+        lstdfs.set_function("remove_file", lstdfs_remove_file);
+        lstdfs.set_function("is_absolute", lstdfs_is_absolute);
         lstdfs.set_function("is_directory", lstdfs_is_directory);
         lstdfs.set_function("current_path", lstdfs_current_path);
         lstdfs.set_function("relative_path", lstdfs_relative_path);

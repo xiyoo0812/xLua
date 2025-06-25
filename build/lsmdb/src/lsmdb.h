@@ -1,7 +1,7 @@
 #pragma once
 
-#include "smdb.h"
 #include "lua_kit.h"
+#include "smdb.h"
 
 using namespace std;
 using namespace luakit;
@@ -14,37 +14,54 @@ namespace lsmdb {
         ~smdb_driver() { close(); }
 
         void close() {
-            if (m_smdb) m_smdb->close();
-            m_smdb = nullptr;
-        }
-
-        void set_codec(codec_base* codec) {
-            m_jcodec = codec;
-        }
-
-        bool open(const char* path) {
-            if (m_smdb) return true;
-            auto smdb = new smdb::smdb();
-            if (!smdb->open(path)) {
-                delete smdb;
-                return false;
+            if (m_smdb) {
+                m_smdb->close();
+                delete m_smdb;
+                m_smdb = nullptr;
             }
-            m_smdb = smdb;
-            return true;
         }
 
-        bool put(lua_State* L) {
-            if (!m_smdb) return false;
-            auto key = read_key(L, 1);
-            auto val = read_value(L, 2);
-            return m_smdb->put(key, val);
+        void flush() { if (m_smdb) m_smdb->flush(); }
+        void set_codec(codec_base* codec) { m_codec = codec; }
+        
+        size_t size() { return m_smdb ? m_smdb->size() : 0; }
+        size_t count() { return m_smdb ? m_smdb->count() : 0; }
+        size_t capacity() { return m_smdb ? m_smdb->capacity() : 0; }
+
+        smdb_code open(const char* path) {
+            close();
+            m_smdb = new smdb();
+            auto code = m_smdb->open(path);
+            if (m_smdb->is_error(code)) {
+                m_smdb->close();
+                delete m_smdb;
+                return code;
+            }
+            return code;
         }
 
-        bool del(lua_State* L) {
-            if (!m_smdb) return false;
-            auto key = read_key(L, 1);
-            m_smdb->del(key);
-            return true;
+        smdb_code put(lua_State* L) {
+            if (m_smdb) {
+                auto key = read_key(L, 1);
+                auto val = read_value(L, 2);
+                return m_smdb->put(key, val);
+            }
+            return SMDB_DB_NOT_INIT;
+        }
+
+        smdb_code del(lua_State* L) {
+            if (m_smdb){
+                auto key = read_key(L, 1);
+                return m_smdb->del(key);
+            }
+            return SMDB_DB_NOT_INIT;
+        }
+
+        smdb_code clear(lua_State* L) {
+            if (m_smdb){
+                return m_smdb->clear();
+            }
+            return SMDB_DB_NOT_INIT;
         }
 
         int get(lua_State* L) {
@@ -59,16 +76,9 @@ namespace lsmdb {
             return 0;
         }
 
-        int arrange(lua_State* L) {
-            if (m_smdb) {
-                m_smdb->arrange(true);
-            }
-            return 0;
-        }
-
         int first(lua_State* L) {
             if (m_smdb) {
-                string key, val;
+                string_view key, val;
                 if (m_smdb->first(key, val)) {
                     push_value(L, key.data(), key.size());
                     push_value(L, val.data(), val.size());
@@ -80,7 +90,7 @@ namespace lsmdb {
 
         int next(lua_State* L) {
             if (m_smdb) {
-                string key, val;
+                string_view key, val;
                 if (m_smdb->next(key, val)) {
                     push_value(L, key.data(), key.size());
                     push_value(L, val.data(), val.size());
@@ -93,15 +103,12 @@ namespace lsmdb {
     protected:
         string read_key(lua_State* L, int idx) {
             size_t len;
-            int type = lua_type(L, idx);
-            if (type == LUA_TNUMBER) {
-                if (lua_isinteger(L, idx)) {
-                    return to_string(lua_tointeger(L, idx));
-                }
-                return to_string(lua_tonumber(L, idx));
+            if (int type = lua_type(L, idx); type != LUA_TSTRING && type != LUA_TNUMBER) {
+                luaL_error(L, "lsmdb read key %d type %s not suppert!", idx, lua_typename(L, idx));
             }
-            if (type != LUA_TSTRING) {
-                luaL_error(L, "lsmdb read %d type %s not suppert!", idx, lua_typename(L, idx));
+            if (m_codec) {
+                const char* buf = (const char*)m_codec->encode(L, idx, &len);
+                return string(buf, len);
             }
             const char* buf = lua_tolstring(L, idx, &len);
             return string(buf, len);
@@ -110,32 +117,32 @@ namespace lsmdb {
         string_view read_value(lua_State* L, int idx) {
             size_t len;
             int type = lua_type(L, idx);
-            if (m_jcodec) {
+            if (m_codec) {
                 switch (type) {
                 case LUA_TNIL:
                 case LUA_TTABLE:
                 case LUA_TNUMBER:
                 case LUA_TSTRING:
                 case LUA_TBOOLEAN: {
-                    const char* buf = (const char*)m_jcodec->encode(L, idx, &len);
+                    const char* buf = (const char*)m_codec->encode(L, idx, &len);
                     return string_view(buf, len);
                 }
                 default:
-                    luaL_error(L, "lsmdb read %d type %s not suppert!", idx, lua_typename(L, idx));
+                    luaL_error(L, "lsmdb read value %d type %s not suppert!", idx, lua_typename(L, idx));
                     break;
                 }
             }
-            if (type != LUA_TSTRING) {
-                luaL_error(L, "lsmdb read %d type %s not suppert!", idx, lua_typename(L, idx));
+            if (type != LUA_TSTRING && type != LUA_TNUMBER) {
+                luaL_error(L, "lsmdb read value %d type %s not suppert!", idx, lua_typename(L, idx));
             }
             const char* buf = lua_tolstring(L, idx, &len);
             return string_view(buf, len);
         }
 
         void push_value(lua_State* L, const char* buf, size_t len) {
-            if (m_jcodec) {
+            if (m_codec) {
                 try {
-                    m_jcodec->decode(L, (uint8_t*)buf, len);
+                    m_codec->decode(L, (uint8_t*)buf, len);
                 } catch (...) {
                     lua_pushlstring(L, buf, len);
                 }
@@ -147,7 +154,7 @@ namespace lsmdb {
         }
 
     protected:
-        smdb::smdb* m_smdb = nullptr;
-        codec_base* m_jcodec = nullptr;
+        smdb* m_smdb = nullptr;
+        codec_base* m_codec = nullptr;
     };
 }

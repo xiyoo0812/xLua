@@ -1,4 +1,7 @@
 #pragma once
+#include <regex>
+#include <filesystem>
+
 #include "lua_buff.h"
 #include "lua_time.h"
 #include "lua_codec.h"
@@ -6,14 +9,23 @@
 #include "lua_class.h"
 
 namespace luakit {
-    static thread_local luabuf lbuf;
-    static thread_local luacodec lcodec;
+    inline thread_local luabuf lbuf;
+    inline luabuf* get_buff() {
+        return &lbuf;
+    }
+
+    inline codec_base* lua_codec() {
+        luacodec* codec = new luacodec();
+        codec->set_buff(&lbuf);
+        return codec;
+    }
 
     class kit_state {
     public:
         kit_state() {
             m_L = luaL_newstate();
             luaL_openlibs(m_L);
+            new_class<kit_state>();
             new_class<codec_base>();
             new_class<class_member>();
             new_class<function_wrapper>();
@@ -25,6 +37,7 @@ namespace luakit {
             );
             lua_checkstack(m_L, 1024);
             lua_table luakit = new_table("luakit");
+            luakit.set_function("luacodec", lua_codec);
             luakit.set_function("encode", [&](lua_State* L) { return encode(L, &lbuf); });
             luakit.set_function("decode", [&](lua_State* L) { return decode(L, &lbuf); });
             luakit.set_function("unserialize", [&](lua_State* L) {  return unserialize(L); });
@@ -32,22 +45,13 @@ namespace luakit {
         }
         kit_state(lua_State* L) : m_L(L) {}
 
+        void __gc() {}
+
         void close() {
             if (m_L) {
                 lua_close(m_L); 
                 m_L = nullptr;
             }
-        }
-
-        luabuf* get_buff() {
-            return &lbuf;
-        }
-
-        codec_base* get_codec() {
-            if (lcodec.get_buff()) {
-                lcodec.set_buff(&lbuf);
-            }
-            return &lcodec;
         }
 
         template<typename T>
@@ -63,6 +67,13 @@ namespace luakit {
             return lua_to_native<T>(m_L, -1);
         }
 
+        template<typename RET>
+        bool get(const char* name, RET& ret) {
+            lua_guard g(m_L);
+            lua_getglobal(m_L, name);
+            return lua_to_native(m_L, -1, ret);
+        }
+
         template <typename F>
         void set_function(const char* function, F func) {
             lua_push_function(m_L, func);
@@ -74,11 +85,18 @@ namespace luakit {
             return lua_isfunction(m_L, -1);
         }
 
-        void set_path(const char* field, const char* path, const char* workdir) {
+        const char* get_path(const char* field) {
+            lua_guard g(m_L);
+            lua_getglobal(m_L, LUA_LOADLIBNAME);
+            lua_getfield(m_L, -1, field);
+            return lua_tostring(m_L, -1);
+        }
+
+        void set_path(const char* field, const char* path) {
             if (strcmp(field, "LUA_PATH") == 0) {
-                set_lua_path("path", path, LUA_PATH_DEFAULT, workdir);
+                set_lua_path("path", path, LUA_PATH_DEFAULT);
             } else {
-                set_lua_path("cpath", path, LUA_CPATH_DEFAULT, workdir);
+                set_lua_path("cpath", path, LUA_CPATH_DEFAULT);
             }
         }
 
@@ -208,32 +226,33 @@ namespace luakit {
         }
 
     protected:
-        void set_lua_path(const char* fieldname, const char* path, const char* dft, const char* workdir){
-            lua_getglobal(m_L, LUA_LOADLIBNAME);
+        void set_lua_path(const char* fieldname, const char* path, const char* dft){
+            std::string buffer;
+            lua_table package = get<lua_table>(LUA_LOADLIBNAME);
             const char* dftmark = strstr(path, LUA_PATH_SEP LUA_PATH_SEP);
-            if (dftmark == nullptr) {
-                lua_pushstring(m_L, path);  /* nothing to change */
-            } else {
-                luaL_Buffer b;
-                luaL_buffinit(m_L, &b);
-                if (path < dftmark) {  /* is there a prefix before ';;'? */
-                    luaL_addlstring(&b, path, dftmark - path);  /* add it */
-                    luaL_addchar(&b, *LUA_PATH_SEP);
+            if (dftmark != nullptr) {
+                if (path < dftmark) {
+                    buffer.append(path, dftmark - path);
+                    buffer.append(LUA_PATH_SEP);
                 }
+                buffer.append(dft);
                 size_t len = strlen(path);
-                luaL_addstring(&b, dft);  /* add default */
-                if (dftmark < path + len - 2) {  /* is there a suffix after ';;'? */
-                    luaL_addchar(&b, *LUA_PATH_SEP);
-                    luaL_addlstring(&b, dftmark + 2, (path + len - 2) - dftmark);
+                if (dftmark < path + len - 2) {
+                    buffer.append(LUA_PATH_SEP);
+                    buffer.append(dftmark + 2, (path + len - 2) - dftmark);
                 }
-                luaL_pushresult(&b);
+            } else {
+                buffer.append(path);
             }
-            if (workdir) {
-                luaL_gsub(m_L, lua_tostring(m_L, -1), LUA_EXEC_DIR, workdir);
-                lua_remove(m_L, -2);  /* remove original string */
+#ifdef WIN32
+            if (strstr(path, LUA_EXEC_DIR)) {
+                auto cur_path = std::filesystem::current_path();
+                auto temp = std::regex_replace(buffer, std::regex(LUA_EXEC_DIR), cur_path.string());
+                package.set(fieldname, temp);
+                return;
             }
-            lua_setfield(m_L, -2, fieldname);  /* package[fieldname] = path value */
-            lua_pop(m_L, 1);
+#endif // WIN32
+            package.set(fieldname, buffer);
         }
 
     protected:

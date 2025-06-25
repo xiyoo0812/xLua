@@ -4,19 +4,18 @@
 
 namespace lcodec {
 
-    static codec_base* rds_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* rds_codec(codec_base* codec) {
         rdscodec* rcodec = new rdscodec();
-        rcodec->set_buff(kit_state.get_buff());
         rcodec->set_codec(codec);
+        rcodec->set_buff(luakit::get_buff());
         return rcodec;
     }
 
-    static codec_base* wss_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* wss_codec(codec_base* codec, bool mask) {
         wsscodec* wcodec = new wsscodec();
-        wcodec->set_buff(kit_state.get_buff());
         wcodec->set_codec(codec);
+        wcodec->set_buff(luakit::get_buff());
+        if (mask) wcodec->build_mask();
         return wcodec;
     }
 
@@ -24,26 +23,29 @@ namespace lcodec {
         return new bitset();
     }
 
-    static codec_base* httpd_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* httpd_codec(codec_base* codec) {
         httpcodec* hcodec = new httpdcodec();
-        hcodec->set_buff(kit_state.get_buff());
         hcodec->set_codec(codec);
+        hcodec->set_buff(luakit::get_buff());
         return hcodec;
     }
 
-    static codec_base* httpc_codec(lua_State* L, codec_base* codec) {
-        luakit::kit_state kit_state(L);
+    static codec_base* httpc_codec(codec_base* codec) {
         httpcodec* hcodec = new httpccodec();
-        hcodec->set_buff(kit_state.get_buff());
         hcodec->set_codec(codec);
+        hcodec->set_buff(luakit::get_buff());
         return hcodec;
     }
 
-    static codec_base* mysql_codec(lua_State* L, size_t session_id) {
-        luakit::kit_state kit_state(L);
+    static codec_base* mysql_codec(size_t session_id) {
         mysqlscodec* codec = new mysqlscodec(session_id);
-        codec->set_buff(kit_state.get_buff());
+        codec->set_buff(luakit::get_buff());
+        return codec;
+    }
+
+    static codec_base* pgsql_codec() {
+        pgsqlscodec* codec = new pgsqlscodec();
+        codec->set_buff(luakit::get_buff());
         return codec;
     }
 
@@ -61,18 +63,42 @@ namespace lcodec {
         llcodec.set_function("guid_index", guid_index);
         llcodec.set_function("guid_time", guid_time);
         llcodec.set_function("hash_code", hash_code);
-        llcodec.set_function("jumphash", jumphash_l);
-        llcodec.set_function("fnv_1_32", fnv_1_32_l);
-        llcodec.set_function("fnv_1a_32", fnv_1a_32_l);
-        llcodec.set_function("murmur3_32", murmur3_32_l);
+        llcodec.set_function("hashkey", lhashkey);
         llcodec.set_function("httpccodec", httpc_codec);
         llcodec.set_function("httpdcodec", httpd_codec);
         llcodec.set_function("mysqlcodec", mysql_codec);
+        llcodec.set_function("pgsqlcodec", pgsql_codec);
         llcodec.set_function("rediscodec", rds_codec);
         llcodec.set_function("wsscodec", wss_codec);
         llcodec.set_function("url_encode", url_encode);
         llcodec.set_function("url_decode", url_decode);
         llcodec.set_function("bitset", bitset_new);
+        llcodec.new_enum("pgsql_type_f",
+            "BIND", BIND,
+            "SYNC", SYNC,
+            "CLOSE", CLOSE,
+            "QUERY", QUERY,
+            "PARSE", PARSE,
+            "FLUSH", FLUSH,
+            "EXECUTE", EXECUTE,
+            "DISCRIBE", DISCRIBE,
+            "PASSWORD", PASSWORD,
+            "FUNC_CALL", FUNC_CALL,
+            "STARTUP", STARTUP
+        );
+        llcodec.new_enum("auth_type_t",
+            "OK", OK,
+            "V5", V5,
+            "MD5", MD5,
+            "SCM", SCM,
+            "GSS", GSS,
+            "SSPI", SSPI,
+            "SASL", SASL,
+            "CLEARTEXT", CLEARTEXT,
+            "SASL_FINAL", SASL_FINAL,
+            "GSS_CONTINUE", GSS_CONTINUE,
+            "SASL_CONTINUE", SASL_CONTINUE
+        );
         kit_state.new_class<bitset>(
             "get", &bitset::get,
             "set", &bitset::set,
