@@ -94,6 +94,16 @@ file(GLOB_RECURSE LWORKER_SRC lworker/src/*.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LWORKER_SRC})
 #end lworker
 
+#begin lsmdb
+set (LSMDB_SRC lsmdb/src/lsmdb.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LSMDB_SRC})
+#end lsmdb
+
+#begin lualog
+file (GLOB_RECURSE LUALOG_SRC lualog/lualog/*.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUALOG_SRC})
+#end lualog
+
 #begin luabus
 file(GLOB_RECURSE LUABUS_SRC luabus/src/*.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
