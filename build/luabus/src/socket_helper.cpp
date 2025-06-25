@@ -12,12 +12,21 @@ void set_no_delay(socket_t fd, int enable) {
 #endif
 }
 
-void set_reuseaddr(socket_t fd) {
-    int one = 1;
+void set_boardcast(socket_t fd) {
+    int opt = 1;
 #ifdef WIN32
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&one, sizeof(one));
+    setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&opt, sizeof(opt));
 #else
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+#endif
+}
+
+void set_reuseaddr(socket_t fd) {
+    int opt = 1;
+#ifdef WIN32
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+#else
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 #endif
 }
 
@@ -26,7 +35,9 @@ void set_no_block(socket_t fd) {
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
 }
 void set_close_on_exec(socket_t fd) {
+#ifndef __ORBIS__
     fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC);
+#endif
 }
 #endif
 
@@ -84,6 +95,9 @@ bool make_ip_addr(sockaddr_storage* addr, socklen_t* len, const char ip[], int p
     ipv4->sin_port = htons(port);
     ipv4->sin_addr.s_addr = INADDR_ANY;
     *len = sizeof(*ipv4);
+#ifdef SCE_API
+    ipv4->sin_len = sizeof(*ipv4);
+#endif
     return ip[0] == '\0' || inet_pton(AF_INET, ip, &ipv4->sin_addr) == 1;
 }
 
@@ -94,12 +108,19 @@ bool get_ip_string(char ip[], size_t ip_size, const void* addr) {
 }
 
 
-int derive_port(int port){
-    socket_t fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+int derive_port(int port, char* ip){
     sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (ip) {
+        if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) return 0;
+    } else {
+        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    }
+#ifdef SCE_API
+    addr.sin_len = sizeof(sockaddr_in);
+#endif
     int try_cnt = 20;
+    socket_t fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     while (try_cnt-- > 0) {
         addr.sin_port = htons(port);
         if (::bind(fd, (sockaddr*)&addr, sizeof(sockaddr_in)) != SOCKET_ERROR) {

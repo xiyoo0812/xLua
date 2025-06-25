@@ -25,6 +25,10 @@
 #define _WIN32_IE 0x0A00	// Change this to the appropriate value to target other versions of IE.
 #endif
 
+#endif
+
+#if defined(WIN32) | defined(_GAMING_XBOX)
+
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 // Windows Header Files:
 
@@ -32,6 +36,8 @@
 #include <Ws2tcpip.h>
 #include <mswsock.h>
 #include <windows.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
 
 // TODO: reference additional headers your program requires here
 #pragma warning(disable: 4996)
@@ -52,10 +58,17 @@
 #include <assert.h>
 
 #ifdef __linux
+#include <ifaddrs.h>
 #define IO_EPOLL
 #endif
 
+#ifdef __NINTENDO__
+#include <ifaddrs.h>
+#define IO_POLL
+#endif
+
 #ifdef __APPLE__
+#include <ifaddrs.h>
 #define IO_KQUEUE
 #endif
 
@@ -87,7 +100,17 @@
 #include <netinet/tcp.h>
 #endif
 
+#if defined(__ORBIS__) || defined(__PROSPERO__)
+#define SCE_API
+#define IO_EPOLL
+#include <net.h>
+#include <unistd.h>
+#include <libnetctl.h>
+#endif
+
 #define LUA_LIB
 
 #include "lua_kit.h"
 #include <iostream>
+
+

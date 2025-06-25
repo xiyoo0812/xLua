@@ -1,8 +1,11 @@
-﻿#pragma once
+#pragma once
 #include <chrono>
 #include "socket_helper.h"
 
-#ifdef WIN32
+#ifdef _GAMING_XBOX
+#include "windows.h"
+#define getpid GetCurrentProcessId
+#elif defined(WIN32) 
 #define getpid _getpid
 #endif
 

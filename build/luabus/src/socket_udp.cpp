@@ -7,22 +7,28 @@ socket_udp::~socket_udp() {
 
 void socket_udp::close() {
     if (m_fd > 0) {
+        if (m_mreq) {
+            setsockopt(m_fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)m_mreq, sizeof(ip_mreq));
+            delete m_mreq;
+        }
         closesocket(m_fd);
         m_fd = INVALID_SOCKET;
     }
 }
 
-bool socket_udp::setup() {
+bool socket_udp::setup(bool noblock, bool broadcast, bool reuse) {
     socket_t fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd <= 0) {
         return false;
     }
     m_fd = fd;
-    set_no_block(fd);
+    if (reuse) set_reuseaddr(fd);
+    if (noblock) set_no_block(fd);
+    if (broadcast) set_boardcast(fd);
     return true;
 }
 
-int socket_udp::listen(lua_State* L, const char* ip, int port) {
+int socket_udp::bind(lua_State* L, const char* ip, int port) {
     socklen_t addr_len = 0;
     sockaddr_storage addr;
     make_ip_addr(&addr, &addr_len, ip, port);
@@ -31,6 +37,20 @@ int socket_udp::listen(lua_State* L, const char* ip, int port) {
         lua_pushstring(L, "udp bind failed!");
         return 2;
     }
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+int socket_udp::add_group(lua_State* L, const char* ip, bool loop) {
+    m_mreq = new ip_mreq;
+    m_mreq->imr_interface.s_addr = INADDR_ANY;
+    inet_pton(AF_INET, ip, &m_mreq->imr_multiaddr);
+    if (setsockopt(m_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)m_mreq, sizeof(ip_mreq)) < 0) {
+        lua_pushboolean(L, false);
+        lua_pushstring(L, "udp add_group failed!");
+        return 2;
+    }
+    setsockopt(m_fd, IPPROTO_IP, IP_MULTICAST_LOOP, (char*)&loop, sizeof(loop));
     lua_pushboolean(L, true);
     return 1;
 }

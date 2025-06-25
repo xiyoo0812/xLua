@@ -399,7 +399,7 @@ void socket_stream::do_recv(size_t max_len, bool is_eof) {
 void socket_stream::dispatch_package() {
     int64_t now = luakit::steady_ms();
     while (m_link_status == elink_status::link_connected) {
-        if (!m_codec){
+        if (!m_codec) {
             on_error("codec-is-bnull");
             break;
         }
@@ -411,7 +411,7 @@ void socket_stream::dispatch_package() {
         //解析数据包头长度
         int32_t package_size = m_codec->load_packet(data_len);
         //当前包头长度解析失败, 关闭连接
-        if (package_size < 0){
+        if (package_size < 0) {
             on_error("package-length-err");
             break;
         }

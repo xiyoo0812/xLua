@@ -12,11 +12,11 @@ public:
 
     void close();
 
-    bool setup();
+    bool setup(bool noblock, bool reuse);
 
     bool invalid();
 
-    int accept(lua_State* L, int timeout);
+    int accept(lua_State* L, int timeout, bool noblock);
 
     int listen(lua_State* L, const char* ip, int port);
 
