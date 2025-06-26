@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include<string>
 
 #include "socket_helper.h"
 
@@ -12,9 +11,11 @@ public:
 
     void close();
 
+    bool invalid();
+
     bool setup(bool noblock, bool reuse);
 
-    bool invalid();
+    void set_buff_size(int rcv_size, int snd_size = 0);
 
     int accept(lua_State* L, int timeout, bool noblock);
 
