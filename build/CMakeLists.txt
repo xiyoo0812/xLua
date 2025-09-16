@@ -4,7 +4,7 @@
 # http://opensource.org/licenses/MIT
 # Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 if ( WIN32 AND NOT CYGWIN AND NOT ( CMAKE_SYSTEM_NAME STREQUAL "WindowsStore" ) AND NOT ANDROID)
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT" CACHE STRING "")
@@ -35,7 +35,7 @@ find_path(XLUA_PROJECT_DIR NAMES SConstruct
 MARK_AS_ADVANCED(XLUA_PROJECT_DIR)
 
 if (NOT LUA_VERSION)
-    set(LUA_VERSION "5.4.6")
+    set(LUA_VERSION "5.4.1")
 endif()
 
 set(LUA_SRC_PATH lua-${LUA_VERSION}/src)
@@ -44,7 +44,7 @@ set ( LUA_IDSIZE 120 CACHE STRING "gives the maximum size for the description of
 configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
 # common headers
-list(APPEND THIRDPART_INC  luakit/include)
+list(APPEND THIRDPART_INC  luazip)
 
 add_definitions(-DFMT_HEADER_ONLY)
 add_definitions(-DWOLFSSL_LIB)
@@ -53,6 +53,11 @@ add_definitions(-DWOLFSSL_NO_SOCK)
 add_definitions(-DWOLFSSL_USER_IO)
 add_definitions(-DWOLFSSL_USER_SETTINGS)
 
+if (MSVC)
+    add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+    add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+endif()
+
 if (APPLE)
 add_definitions(-DWOLFSSL_APPLE_NATIVE_CERT_VALIDATION)
 set(CMAKE_LD_FLAGS "-framework CoreFoundation")
@@ -60,57 +65,54 @@ set(CMAKE_LD_FLAGS "-framework Security")
 endif ()
 
 #begin luapb
-set (LUAPB_SRC luapb/src/luapb.cpp)
+set (LUAPB_SRC luapb/luapb.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LUAPB_SRC})
 #end luapb
 
 #begin ljson
-set (LJSON_SRC ljson/src/ljson.cpp ljson/src/yyjson.c)
+set (LJSON_SRC ljson/ljson.cpp ljson/yyjson.c)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LJSON_SRC})
 #end ljson
 
 #begin lcodec
-set (LCODEC_SRC lcodec/src/lcodec.cpp)
+set (LCODEC_SRC lcodec/lcodec.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LCODEC_SRC})
 #end lcodec
 
 #begin ltimer
-set (LTIMER_SRC ltimer/src/ltimer.cpp)
+set (LTIMER_SRC ltimer/ltimer.cpp)
  set (THIRDPART_SRC ${THIRDPART_SRC} ${LTIMER_SRC})
 #end ltimer
 
-#begin lminiz
-set (LMINIZ_SRC lminiz/src/lminiz.cpp lminiz/src/miniz.c)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LMINIZ_SRC})
-#end lminiz
+#begin luazip
+list(APPEND THIRDPART_INC  luakit)
+set (LUAZIP_SRC luazip/luazip.cpp luazip/miniz.c luazip/lz4.c)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUAZIP_SRC})
+#end luazip
 
 #begin lstdfs
-set (LSTDFS_SRC lstdfs/src/lstdfs.cpp)
+set (LSTDFS_SRC lstdfs/lstdfs.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSTDFS_SRC})
 #end lstdfs
 
-#begin lworker
-file(GLOB_RECURSE LWORKER_SRC lworker/src/*.cpp)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LWORKER_SRC})
-#end lworker
+#begin luabus
+file(GLOB_RECURSE LUABUS_SRC luabus/*.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
+#end luabus
 
 #begin lsmdb
-set (LSMDB_SRC lsmdb/src/lsmdb.cpp)
+set (LSMDB_SRC lsmdb/lsmdb.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSMDB_SRC})
 #end lsmdb
 
 #begin lualog
-file (GLOB_RECURSE LUALOG_SRC lualog/lualog/*.cpp)
+file (GLOB_RECURSE LUALOG_SRC lualog/*.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LUALOG_SRC})
 #end lualog
 
-#begin luabus
-file(GLOB_RECURSE LUABUS_SRC luabus/src/*.cpp)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
-#end luabus
 
 #begin lss
-set(SSL_PATH lssl/src/)
+set(SSL_PATH luassl/)
 file(GLOB_RECURSE LSSL_SRC ${SSL_PATH}ssl/*.cpp ${SSL_PATH}ssl/*.c ${SSL_PATH}wolfcrypt/src/*.c ${SSL_PATH}src/*.c)
 file(GLOB_RECURSE LSSL_SRC1 ${SSL_PATH}src/x509_str.c ${SSL_PATH}src/x509.c ${SSL_PATH}src/conf.c ${SSL_PATH}src/bio.c ${SSL_PATH}src/pk.c)
 file(GLOB_RECURSE LSSL_SRC2 ${SSL_PATH}src/ssl_bn.c ${SSL_PATH}src/ssl_misc.c ${SSL_PATH}src/ssl_asn1.c ${SSL_PATH}src/ssl_crypto.c ${SSL_PATH}src/ssl_certman.c)
@@ -118,9 +120,9 @@ file(GLOB_RECURSE LSSL_SRC3 ${SSL_PATH}wolfcrypt/src/evp.c ${SSL_PATH}wolfcrypt/
 list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC1})
 list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC2})
 list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC3})
-list(APPEND THIRDPART_INC  lssl/src)
+list(APPEND THIRDPART_INC  luassl)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSSL_SRC})
-#end lssl
+#end luassl
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
