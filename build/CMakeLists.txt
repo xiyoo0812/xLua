@@ -44,7 +44,7 @@ set ( LUA_IDSIZE 120 CACHE STRING "gives the maximum size for the description of
 configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
 # common headers
-list(APPEND THIRDPART_INC  luazip)
+list(APPEND THIRDPART_INC  luakit)
 
 add_definitions(-DFMT_HEADER_ONLY)
 add_definitions(-DWOLFSSL_LIB)
@@ -85,7 +85,6 @@ set (LTIMER_SRC ltimer/ltimer.cpp)
 #end ltimer
 
 #begin luazip
-list(APPEND THIRDPART_INC  luakit)
 set (LUAZIP_SRC luazip/luazip.cpp luazip/miniz.c luazip/lz4.c)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LUAZIP_SRC})
 #end luazip
@@ -95,21 +94,10 @@ set (LSTDFS_SRC lstdfs/lstdfs.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSTDFS_SRC})
 #end lstdfs
 
-#begin luabus
-file(GLOB_RECURSE LUABUS_SRC luabus/*.cpp)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
-#end luabus
-
 #begin lsmdb
 set (LSMDB_SRC lsmdb/lsmdb.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSMDB_SRC})
 #end lsmdb
-
-#begin lualog
-file (GLOB_RECURSE LUALOG_SRC lualog/*.cpp)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LUALOG_SRC})
-#end lualog
-
 
 #begin lss
 set(SSL_PATH luassl/)
@@ -123,6 +111,16 @@ list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC3})
 list(APPEND THIRDPART_INC  luassl)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSSL_SRC})
 #end luassl
+
+#begin luabus
+file(GLOB_RECURSE LUABUS_SRC luabus/*.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
+#end luabus
+
+#begin quanta
+set (QUANTA_SRC quanta/quanta.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${QUANTA_SRC})
+#end quanta
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
