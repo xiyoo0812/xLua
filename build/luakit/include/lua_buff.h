@@ -4,7 +4,7 @@
 namespace luakit {
 
     const size_t BUFFER_DEF = 64 * 1024;        //64K
-    const size_t BUFFER_MAX = 16 * 1024 * 1024; //16M
+    const size_t BUFFER_MAX = 32 * 1024 * 1024; //16M
     const size_t ALIGN_SIZE = 16;               //水位
 
     class luabuf {
@@ -52,6 +52,23 @@ namespace luakit {
                 return src_len;
             }
             return 0;
+        }
+
+        size_t hold_place(size_t offset) {
+            size_t base = m_tail - m_head;
+            pop_space(offset);
+            return base;
+        }
+
+        slice* free_place(size_t base, size_t offset) {
+            auto data = m_head + base + offset;
+            size_t data_len = m_tail - data;
+            m_tail = m_head + base;
+            if (data_len > 0) {
+                m_slice.attach(data, data_len);
+                return &m_slice;
+            }
+            return nullptr;
         }
 
         size_t push_data(const uint8_t* src, size_t push_len) {
@@ -103,7 +120,7 @@ namespace luakit {
             return 0;
         }
 
-        slice* get_slice(size_t len = 0, uint16_t offset = 0) {
+        slice* get_slice(size_t len = 0, uint32_t offset = 0) {
             size_t data_len = m_tail - (m_head + offset);
             m_slice.attach(m_head + offset, len == 0 ? data_len : len);
             return &m_slice;
@@ -119,7 +136,7 @@ namespace luakit {
                     while (nsize - data_len < len) {
                         nsize *= 2;
                     }
-                    if (nsize >= BUFFER_MAX) {
+                    if (nsize > BUFFER_MAX) {
                         return nullptr;
                     }
                     space_len = _resize(nsize);

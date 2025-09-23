@@ -42,7 +42,7 @@ namespace smdb {
             m_values.clear();
             m_indexs.clear();
             auto file = fopen(path, "rb");
-            if (!file) return false;
+            if (!file) return true;
             bool ok = read(file);
             fclose(file);
             return ok;
@@ -64,7 +64,7 @@ namespace smdb {
                 uint32_t size = (ksz << 24) | (vsz & MAX_VAL_SIZE);
                 size_t grow = ksz + vsz + sizeof(uint32_t);
                 if (offset + grow > alloc_size) {
-                    alloc_size += MEM_GROW_SIZE;
+                    alloc_size += (grow < MEM_GROW_SIZE ? MEM_GROW_SIZE : grow);
                     buf = (char*)realloc(buf, alloc_size);
                     if (!buf) return false;
                 }
@@ -153,14 +153,15 @@ namespace smdb {
             auto file = fopen(path, "wb+");
             if (!file) return false;
             //更改文件大小
-            ftruncate(fileno(file), sizeof(dbheader) + size);
+            size_t fsize = sizeof(dbheader) + size;
+            ftruncate(fileno(file), fsize);
             //写入文件
             fseek(file, 0, SEEK_SET);
             dbheader header{ { 'S', 'M', 'D', 'B' } };
             header.filesize = size;
             header.kvnum = m_values.size();
-            fwrite(&header, 1, sizeof(dbheader), file);
-            fwrite(buf, 1, size, file);
+            memcpy(buf, &header, sizeof(dbheader));
+            fwrite(buf, 1, fsize, file);
             fflush(file);
             fclose(file);
             commit();
@@ -186,8 +187,9 @@ namespace smdb {
         bool compress(const char* path, char* buf, size_t size) {
             size_t zsize = ZSTD_compressBound(size);
             if (ZSTD_isError(zsize)) return false;
-            char* zbuf = (char*)malloc(zsize);
-            size_t comp_ize = ZSTD_compress(zbuf, zsize, buf, size, ZSTD_defaultCLevel());
+            size_t header_len = sizeof(dbheader);
+            char* zbuf = (char*)malloc(zsize + header_len);
+            size_t comp_ize = ZSTD_compress(zbuf + header_len, zsize, buf, size, ZSTD_defaultCLevel());
             if (ZSTD_isError(comp_ize)) {
                 free(zbuf);
                 return false;
