@@ -290,3 +290,16 @@ namespace luakit {
         ltable.set_function("deepcopy", lua_table_deepcopy);
     }
 }
+
+extern "C" {
+    LUALIB_API inline int luaopen_luakit(lua_State* L) {
+        lua_checkstack(L, 1024);
+        luakit::kit_state kit = luakit::kit_state(L);
+        auto lkit = kit.new_table("luakit");
+        lkit.set_function("encode", [&](lua_State* L) { return luakit::encode(L, luakit::get_buff()); });
+        lkit.set_function("decode", [&](lua_State* L) { return luakit::decode(L, luakit::get_buff()); });
+        lkit.set_function("serialize", [&](lua_State* L) { return luakit::serialize(L, luakit::get_buff()); });
+        lkit.set_function("unserialize", [&](lua_State* L) {  return luakit::unserialize(L); });
+        return lkit.push_stack();
+    }
+}
