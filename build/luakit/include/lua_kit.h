@@ -282,6 +282,8 @@ namespace luakit {
         lstring.set_function("split", lua_string_split);
         lstring.set_function("title", lua_string_title);
         lstring.set_function("untitle", lua_string_untitle);
+        lstring.set_function("serialize", [&](lua_State* L) { return luakit::serialize(L, luakit::get_buff()); });
+        lstring.set_function("unserialize", [&](lua_State* L) {  return luakit::unserialize(L); });
         // lstring.set_function("ends_with", lua_string_ends_with);
         // lstring.set_function("starts_with", lua_string_starts_with);
         auto ltable = kit->get<lua_table>("table");
@@ -298,8 +300,7 @@ extern "C" {
         auto lkit = kit.new_table("luakit");
         lkit.set_function("encode", [&](lua_State* L) { return luakit::encode(L, luakit::get_buff()); });
         lkit.set_function("decode", [&](lua_State* L) { return luakit::decode(L, luakit::get_buff()); });
-        lkit.set_function("serialize", [&](lua_State* L) { return luakit::serialize(L, luakit::get_buff()); });
-        lkit.set_function("unserialize", [&](lua_State* L) {  return luakit::unserialize(L); });
+        luakit_extendlibs(&kit);
         return lkit.push_stack();
     }
 }
