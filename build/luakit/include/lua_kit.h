@@ -24,7 +24,7 @@ namespace luakit {
         }
         return &lcodec;
     }
-    
+
     class kit_state;
     void luakit_extendlibs(kit_state* kit);
 
@@ -43,6 +43,7 @@ namespace luakit {
                 "peek", &slice::check,
                 "string", &slice::string
             );
+            luakit_extendlibs(this);
             lua_checkstack(m_L, 1024);
             lua_table luakit = new_table("luakit");
             luakit.set_function("encode", [&](lua_State* L) { return encode(L, &lbuf); });
