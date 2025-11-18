@@ -12,13 +12,13 @@ namespace luakit {
     //     return str.ends_with(with);
     // }
 
-    inline char* lua_string_title(char* str) {
-        if (str && *str) *str = std::toupper(static_cast<unsigned char>(*str));
+    inline std::string lua_string_title(std::string str) {
+        if (!str.empty()) str[0] = std::toupper(static_cast<unsigned char>(str[0]));
         return str;
     }
 
-    inline char* lua_string_untitle(char* str) {
-        if (str && *str) *str = std::tolower(static_cast<unsigned char>(*str));
+    inline std::string lua_string_untitle(std::string str) {
+        if (!str.empty()) str[0] = std::tolower(static_cast<unsigned char>(str[0]));
         return str;
     }
 
