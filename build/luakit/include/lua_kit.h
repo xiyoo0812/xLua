@@ -4,6 +4,7 @@
 #include "lua_codec.h"
 #include "lua_table.h"
 #include "lua_class.h"
+#include "lua_extend.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -23,6 +24,9 @@ namespace luakit {
         }
         return &lcodec;
     }
+    
+    class kit_state;
+    void luakit_extendlibs(kit_state* kit);
 
     class kit_state {
     public:
@@ -272,4 +276,16 @@ namespace luakit {
         lua_State* m_L = nullptr;
     };
 
+    inline void luakit_extendlibs(kit_state* kit) {
+        auto lstring = kit->get<lua_table>("string");
+        lstring.set_function("split", lua_string_split);
+        lstring.set_function("title", lua_string_title);
+        lstring.set_function("untitle", lua_string_untitle);
+        // lstring.set_function("ends_with", lua_string_ends_with);
+        // lstring.set_function("starts_with", lua_string_starts_with);
+        auto ltable = kit->get<lua_table>("table");
+        ltable.set_function("copy", lua_table_copy);
+        ltable.set_function("clean", lua_table_clean);
+        ltable.set_function("deepcopy", lua_table_deepcopy);
+    }
 }
