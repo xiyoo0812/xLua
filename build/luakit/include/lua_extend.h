@@ -43,11 +43,14 @@ namespace luakit {
     }
     
     static void copy_table(lua_State *L, int src_idx, int dst_idx) {
+        src_idx = lua_absindex(L, src_idx);
+        dst_idx = lua_absindex(L, dst_idx);
         lua_pushnil(L);
         while (lua_next(L, src_idx) != 0) {
             if (lua_istable(L, -1)) {
+                lua_pushvalue(L, -2);
                 lua_createtable(L, 0, 8);
-                copy_table(L, lua_gettop(L) - 1, lua_gettop(L));
+                copy_table(L, -3, -1);
                 lua_rawset(L, dst_idx);
             } else {
                 lua_pushvalue(L, -2);
@@ -82,7 +85,6 @@ namespace luakit {
                 lua_rawset(L, 2);
                 lua_pop(L, 1);
             }
-            lua_pop(L, 1);
         }
         return 1;
     }
@@ -96,7 +98,6 @@ namespace luakit {
                 lua_rawset(L, 1);
                 lua_pop(L, 1);
             }
-            lua_pop(L, 1);
         }
         return 0;
     }
