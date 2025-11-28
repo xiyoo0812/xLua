@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <codecvt>
 
 #if defined(__NINTENDO__)
 #include "filesystem.hpp"
@@ -19,69 +20,74 @@ using namespace std;
 using namespace luakit;
 using namespace std::chrono;
 
-#include <locale>
-#include <codecvt>
+
+namespace luakit {
+    template<>
+    inline int native_to_lua(lua_State* L, path v) {
+        lua_pushlstring(L, reinterpret_cast<const char*>(v.string().c_str()), v.string().size());
+        return 1;
+    }
+    template<>
+    inline fspath lua_to_native(lua_State* L, int i) {
+        string_view fpath = lua_to_native<string_view>(L, i);
+        try {
+            return fspath(fpath, locale(".UTF8"));
+        } catch (...) {}
+        return fspath(fpath, locale(""));
+    }
+}
 
 namespace lstdfs {
 
     struct file_info {
-        string name;
+        fspath name;
         string type;
     };
     using path_vector = vector<string>;
     using file_vector = vector<file_info*>;
 
-    std::string from_utf8(std::string utf8_str) {
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_converter;
-        std::wstring wide_str = utf8_converter.from_bytes(utf8_str);
-        std::wstring_convert<std::codecvt<wchar_t, char, std::mbstate_t>> mb_converter(
-            new std::codecvt<wchar_t, char, std::mbstate_t>("zh-CN") // Windows 简体中文环境
-        );;
-        return mb_converter.to_bytes(wide_str);
-    }
-
     std::string to_utf8(std::string mbcs_str) {
         std::wstring_convert<std::codecvt<wchar_t, char, std::mbstate_t>> mb_converter(
-            new std::codecvt<wchar_t, char, std::mbstate_t>("zh-CN") // Windows 简体中文环境
+            new std::codecvt<wchar_t, char, std::mbstate_t>("zh-CN")
         );
         std::wstring wide_str = mb_converter.from_bytes(mbcs_str);
         std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
         return converter.to_bytes(wide_str);
     }
 
-    string lstdfs_absolute(string_view path) {
-        return absolute(path).string();
+    fspath lstdfs_absolute(fspath path) {
+        return absolute(path);
     }
 
-    string lstdfs_current_path() {
-        return current_path().string();
+    fspath lstdfs_current_path() {
+        return current_path();
     }
 
-    string lstdfs_temp_dir() {
-        return temp_directory_path().string();
+    fspath lstdfs_temp_dir() {
+        return temp_directory_path();
     }
 
-    int lstdfs_chdir(lua_State* L, string_view path) {
+    int lstdfs_chdir(lua_State* L, fspath path) {
         try {
             current_path(path);
             return variadic_return(L, true);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, false, e.what());
         }
     }
 
-    int lstdfs_mkdir(lua_State* L, string_view path) {
+    int lstdfs_mkdir(lua_State* L, fspath path) {
         try {
             bool res = create_directories(path);
             return variadic_return(L, res);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, false, e.what());
         }
     }
 
-    int lstdfs_remove(lua_State* L, string_view path, bool rmall) {
+    int lstdfs_remove(lua_State* L, fspath path, bool rmall) {
         try {
             if (rmall) {
                 auto size = remove_all(path);
@@ -90,38 +96,38 @@ namespace lstdfs {
             bool res = remove(path);
             return variadic_return(L, res);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, false, e.what());
         }
     }
 
-    int lstdfs_copy(lua_State* L, string_view from, string_view to, copy_options option) {
+    int lstdfs_copy(lua_State* L, fspath from, fspath to, copy_options option) {
         try {
 #ifndef __NINTENDO__
             filesystem::copy(from, to, option);
 #endif
             return variadic_return(L, true);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, false, e.what());
         }
     }
-    int lstdfs_copy_file(lua_State* L, string_view from, string_view to, copy_options option) {
+    int lstdfs_copy_file(lua_State* L, fspath from, fspath to, copy_options option) {
         try {
             copy_file(from, to, option);
             return variadic_return(L, true);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, false, e.what());
         }
     }
 
-    int lstdfs_rename(lua_State* L, string_view pold, string_view pnew) {
+    int lstdfs_rename(lua_State* L, fspath pold, fspath pnew) {
         try {
             rename(pold, pnew);
             return variadic_return(L, true);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, false, e.what());
         }
     }
@@ -130,78 +136,78 @@ namespace lstdfs {
         return exists(path);
     }
 
-    string lstdfs_root_name(string_view path) {
-        return fspath(path).root_name().string();
+    fspath lstdfs_root_name(fspath path) {
+        return path.root_name();
     }
 
-    string lstdfs_filename(string_view path) {
-        return fspath(path).filename().string();
+    fspath lstdfs_filename(fspath path) {
+        return path.filename();
     }
 
-    string lstdfs_extension(string_view path) {
-        return fspath(path).extension().string();
+    fspath lstdfs_extension(fspath path) {
+        return path.extension();
     }
 
-    string lstdfs_root_path(string_view path) {
-        return fspath(path).root_path().string();
+    fspath lstdfs_root_path(fspath path) {
+        return path.root_path();
     }
 
-    string lstdfs_parent_path(string_view path) {
-        return fspath(path).parent_path().string();
+    fspath lstdfs_parent_path(fspath path) {
+        return path.parent_path();
     }
 
-    string lstdfs_relative_path(string_view path) {
-        return fspath(path).relative_path().string();
+    fspath lstdfs_relative_path(fspath path) {
+        return path.relative_path();
     }
 
-    string lstdfs_append(string_view path, string_view append_path) {
-        return fspath(path).append(append_path).string();
+    fspath lstdfs_append(fspath path, string_view append_path) {
+        return path.append(append_path);
     }
 
-    string lstdfs_concat(string_view path, string_view concat_path) {
-        return fspath(path).concat(concat_path).string();
+    fspath lstdfs_concat(fspath path, string_view concat_path) {
+        return path.concat(concat_path);
     }
 
-    string lstdfs_remove_filename(string_view path) {
-        return fspath(path).remove_filename().string();
+    fspath lstdfs_remove_filename(fspath path) {
+        return path.remove_filename();
     }
 
-    string lstdfs_replace_filename(string_view path, string_view filename) {
-        return fspath(path).replace_filename(filename).string();
+    fspath lstdfs_replace_filename(fspath path, fspath filename) {
+        return path.replace_filename(filename);
     }
 
-    string lstdfs_replace_extension(string_view path, string_view extens) {
-        return fspath(path).replace_extension(extens).string();
+    fspath lstdfs_replace_extension(fspath path, fspath extens) {
+        return path.replace_extension(extens);
     }
 
-    string lstdfs_make_preferred(string_view path) {
-        return fspath(path).make_preferred().string();
+    fspath lstdfs_make_preferred(fspath path) {
+        return path.make_preferred();
     }
 
-    size_t lstdfs_file_size(string_view path) {
+    size_t lstdfs_file_size(fspath path) {
         return file_size(path);
     }
 
-    string lstdfs_stem(string_view path) {
-        return fspath(path).stem().string();
+    fspath lstdfs_stem(fspath path) {
+        return path.stem();
     }
 
-    bool lstdfs_is_directory(string_view path) {
+    bool lstdfs_is_directory(fspath path) {
         return is_directory(path);
     }
 
-    bool lstdfs_is_absolute(string_view path) {
-        return fspath(path).is_absolute();
+    bool lstdfs_is_absolute(fspath path) {
+        return path.is_absolute();
     }
 
-    int lstdfs_last_write_time(lua_State* L, string_view path) {
+    int lstdfs_last_write_time(lua_State* L, fspath path) {
         try {
             auto ftime = last_write_time(path);
             auto sctp = time_point_cast<system_clock::duration>(ftime - file_time_type::clock::now() + system_clock::now());
             time_t cftime = system_clock::to_time_t(sctp);
             return variadic_return(L, cftime);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, 0, e.what());
         }
     }
@@ -223,32 +229,31 @@ namespace lstdfs {
         }
     }
 
-    string lstdfs_filetype(string_view path) {
+    string lstdfs_filetype(fspath path) {
         return get_file_type(path);
     }
 
-    int lstdfs_dir(lua_State* L, string_view path, bool recursive) {
+    int lstdfs_dir(lua_State* L, fspath path, bool recursive) {
         try {
             file_vector files;
             if (recursive) {
                 for (auto entry : recursive_directory_iterator(path)) {
-                    files.push_back(new file_info({ entry.path().string(), get_file_type(entry.path()) }));
+                    files.push_back(new file_info({ entry.path(), get_file_type(entry.path())}));
                 }
                 return variadic_return(L, files);
             }
             for (auto entry : directory_iterator(path)) {
-                files.push_back(new file_info({ entry.path().string(), get_file_type(entry.path()) }));
+                files.push_back(new file_info({ entry.path(), get_file_type(entry.path()) }));
             }
             return variadic_return(L, files);
         }
-        catch (filesystem_error const& e) {
+        catch (exception const& e) {
             return variadic_return(L, nullptr, e.what());
         }
     }
 
-    path_vector lstdfs_split(string_view cpath) {
+    path_vector lstdfs_split(fspath path) {
         path_vector values;
-        fspath path = fspath(cpath);
         for (auto it = path.begin(); it != path.end(); ++it) {
             values.push_back((*it).string());
         }
@@ -272,7 +277,6 @@ namespace lstdfs {
             "overwrite_existing", copy_options::overwrite_existing
         );
         lstdfs.set_function("to_utf8", to_utf8);
-        lstdfs.set_function("from_utf8", from_utf8);
         lstdfs.set_function("dir", lstdfs_dir);
         lstdfs.set_function("stem", lstdfs_stem);
         lstdfs.set_function("copy", lstdfs_copy);
