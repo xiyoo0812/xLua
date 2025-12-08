@@ -45,6 +45,7 @@ configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luacon
 
 # common headers
 list(APPEND THIRDPART_INC  luakit)
+list(APPEND THIRDPART_INC  lualog)
 
 add_definitions(-DFMT_HEADER_ONLY)
 add_definitions(-DWOLFSSL_LIB)
@@ -117,13 +118,18 @@ list(APPEND THIRDPART_INC  luassl)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LSSL_SRC})
 #end luassl
 
+#begin lworker
+file(GLOB_RECURSE LWORKER_SRC lworker.cpp)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LWORKER_SRC})
+#end lworker
+
 #begin luabus
 file(GLOB_RECURSE LUABUS_SRC luabus/*.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LUABUS_SRC})
 #end luabus
 
 #begin quanta
-set (QUANTA_SRC quanta/quanta.cpp)
+file(GLOB_RECURSE QUANTA_SRC quanta/*.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${QUANTA_SRC})
 #end quanta
 

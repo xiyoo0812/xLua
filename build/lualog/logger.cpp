@@ -1,4 +1,4 @@
-
+#define LUA_LIB
 #include "logger.h"
 
 #ifdef WIN32
@@ -88,7 +88,8 @@ namespace logger {
         auto logtxt = msg->format(prefix_, suffix_, color());
         size_t msize = logtxt.size();
         if (size_ + msize >= USHRT_MAX) flush(logtime);
-        raw_write(logtxt, msize);
+        if (output_) output_(logtxt.c_str(), logtxt.size(), (int)msg->level());
+        else raw_write(logtxt, msize);
     }
 
     // class stdio_dest
@@ -140,7 +141,7 @@ namespace logger {
         size_ += size;
     }
 
-    void log_file_base::create(path file_path, sstring file_name) {
+    void log_file_base::create(fspath file_path, sstring file_name) {
         if (file_) {
             file_->flush();
             file_->close();
@@ -164,26 +165,17 @@ namespace logger {
     // class log_rollingfile
     // --------------------------------------------------------------------------------
     template<class rolling_evaler>
-    log_rollingfile<rolling_evaler>::log_rollingfile(path& log_path, const zone_time& time, vstring feature, size_t max_line, size_t clean_time)
-        : log_file_base(max_line, time), log_path_(log_path), feature_(feature), clean_time_(clean_time){
+    log_rollingfile<rolling_evaler>::log_rollingfile(fspath& log_path, const zone_time& time, vstring feature, size_t max_line)
+        : log_file_base(max_line, time), log_path_(log_path), feature_(feature){
     }
 
     template<class rolling_evaler>
     void log_rollingfile<rolling_evaler>::flush(const zone_time& time) {
         if (file_ == nullptr || rolling_evaler_.eval(file_time_, time) || line_ > max_line_) {
-            create_directories(log_path_);
             try {
-                for (auto entry : recursive_directory_iterator(log_path_)) {
-                    if (entry.is_directory() || entry.path().extension().string() != ".log") continue;
-                    if (entry.path().stem().has_extension()) {
-                        auto ftime = last_write_time(entry.path());
-                        if ((size_t)duration_cast<seconds>(file_time_type::clock::now() - ftime).count() > clean_time_) {
-                            remove(entry.path());
-                        }
-                    }
-                }
+                create_directories(log_path_);
+                create(log_path_, new_log_file_name(time));
             } catch (...) {}
-            create(log_path_, new_log_file_name(time));
             assert(file_);
         }
         log_file_base::flush(time);
@@ -196,19 +188,23 @@ namespace logger {
 
     // class log_service
     // --------------------------------------------------------------------------------
-    void log_service::option(cpchar log_path, cpchar service, cpchar index) {
-        if (main_dest_) return;
+    bool log_service::option(fspath log_path, cpchar service, cpchar index) {
+        if (main_dest_) return true;
         log_path_ = log_path;
         zone_ = const_cast<time_zone*>(current_zone());
         service_ = std::format("{}-{}", service, index);
-        create_directories(log_path);
-        add_dest(service);
-        //启动日志线程
-        thread_ = std::jthread(std::bind(&log_service::run, this, std::placeholders::_1));
+        try { 
+            create_directories(log_path_);
+            add_dest(service);
+            //启动日志线程
+            thread_ = std::jthread(std::bind(&log_service::run, this, std::placeholders::_1));
+            return true;
+        } catch (...) {}
+        return false;
     }
 
-    path log_service::build_path(cpchar feature) {
-        path log_path = log_path_;
+    fspath log_service::build_path(cpchar feature) {
+        fspath log_path = log_path_;
         if (strncmp(service_.c_str(), feature, strlen(feature)) == 0) {
             log_path.append(service_);
         } else {
@@ -221,12 +217,12 @@ namespace logger {
         std::lock_guard<spin_mutex> lock(mutex_);
         if (!dest_features_.contains(feature)) {
             sptr<log_dest> logfile = nullptr;
-            path logger_path = build_path(feature);
+            fspath logger_path = build_path(feature);
             auto ztime = zoned_time(zone_, time_point_cast<milliseconds>(system_clock::now()));
             if (rolling_type_ == DAYLY) {
-                logfile = std::make_shared<log_dailyrollingfile>(logger_path, ztime, feature, max_line_, clean_time_);
+                logfile = std::make_shared<log_dailyrollingfile>(logger_path, ztime, feature, max_line_);
             } else {
-                logfile = std::make_shared<log_hourlyrollingfile>(logger_path, ztime, feature, max_line_, clean_time_);
+                logfile = std::make_shared<log_hourlyrollingfile>(logger_path, ztime, feature, max_line_);
             }
             if (!main_dest_) {
                 main_dest_ = logfile;
@@ -241,15 +237,15 @@ namespace logger {
         if (!dest_lvls_.contains(log_lvl)) {
             sstring feature = level_names[(int)log_lvl];
             std::transform(feature.begin(), feature.end(), feature.begin(), [](auto c) { return std::tolower(c); });
-            path logger_path = build_path(service_.c_str());
+            fspath logger_path = build_path(service_.c_str());
             logger_path.append(feature);
             auto ztime = zoned_time(zone_, time_point_cast<milliseconds>(system_clock::now()));
             std::lock_guard<spin_mutex> lock(mutex_);
             if (rolling_type_ == DAYLY) {
-                auto logfile = std::make_shared<log_dailyrollingfile>(logger_path, ztime, feature, max_line_, clean_time_);
+                auto logfile = std::make_shared<log_dailyrollingfile>(logger_path, ztime, feature, max_line_);
                 dest_lvls_.insert(std::make_pair(log_lvl, logfile));
             } else {
-                auto logfile = std::make_shared<log_hourlyrollingfile>(logger_path, ztime, feature, max_line_, clean_time_);
+                auto logfile = std::make_shared<log_hourlyrollingfile>(logger_path, ztime, feature, max_line_);
                 dest_lvls_.insert(std::make_pair(log_lvl, logfile));
             }
         }
@@ -259,13 +255,15 @@ namespace logger {
     bool log_service::add_file_dest(cpchar feature, cpchar fname) {
         std::lock_guard<spin_mutex> lock(mutex_);
         if (!dest_features_.contains(feature)) {
-            auto ztime = zoned_time(zone_, time_point_cast<milliseconds>(system_clock::now()));
-            auto logfile = std::make_shared<log_file_base>(max_line_, ztime);
-            path logger_path = build_path(service_.c_str());
-            create_directories(logger_path);
-            logfile->create(logger_path, fname);
-            logfile->ignore_prefix(true);
-            dest_features_.insert(std::make_pair(feature, logfile));
+            try {
+                fspath logger_path = build_path(service_.c_str());
+                create_directories(logger_path);
+                auto ztime = zoned_time(zone_, time_point_cast<milliseconds>(system_clock::now()));
+                auto logfile = std::make_shared<log_file_base>(max_line_, ztime);
+                logfile->create(logger_path, fname);
+                logfile->ignore_prefix(true);
+                dest_features_.insert(std::make_pair(feature, logfile));
+            } catch (...) {}
         }
         return true;
     }
@@ -288,13 +286,6 @@ namespace logger {
     void log_service::del_lvl_dest(log_level log_lvl) {
         std::lock_guard<spin_mutex> lock(mutex_);
         dest_lvls_.erase(log_lvl);
-    }
-
-    void log_service::set_dest_clean_time(cpchar feature, size_t clean_time){
-        std::lock_guard<spin_mutex> lock(mutex_);
-        if (auto it = dest_features_.find(feature); it != dest_features_.end()) {
-            it->second->set_clean_time(clean_time);
-        }
     }
 
     void log_service::ignore_prefix(cpchar feature, bool prefix) {

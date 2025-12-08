@@ -4,39 +4,38 @@
 
 using namespace luakit;
 
-enum class elink_status : int
-{
-    link_init       = 0,
-    link_connecting = 1,
-    link_connected  = 2,
-    link_closing    = 3,
-    link_closed     = 4,
+enum class elink_status : uint8_t {
+    LINK_INIT       = 0,
+    LINK_CONNECTING = 1,
+    LINK_CONNECTED  = 2,
+    LINK_CLOSING    = 3,
+    LINK_CLOSED     = 4,
 };
 
 // 协议类型
-enum class eproto_type : int
-{
-    proto_pb        = 0,    // pb协议，pb
-    proto_rpc       = 1,    // rpc协议，rpc
-    proto_text      = 2,    // text协议，mysql/mongo/http/wss/redis
-    proto_max       = 3,    // max
+enum class eproto_type : uint8_t {
+    PROTO_PB        = 0,    // pb协议，pb
+    PROTO_RPC       = 1,    // rpc协议，rpc
+    PROTO_TEXT      = 2,    // text协议，mysql/mongo/http/wss/redis
+    PROTO_MAX       = 3,    // max
 };
 
-struct sendv_item
-{
+using enum elink_status;
+using enum eproto_type;
+
+struct sendv_item {
     const void* data;
     size_t len;
 };
 
-struct socket_object
-{
+struct socket_object {
     virtual ~socket_object() {};
     virtual bool update(int64_t now) = 0;
     virtual int get_sendbuf_size() { return 0; }
     virtual int get_recvbuf_size() { return 0; }
-    virtual void close() { m_link_status = elink_status::link_closed; };
+    virtual void close() { m_link_status = LINK_CLOSED; };
     virtual bool get_remote_ip(std::string& ip) = 0;
-    virtual void connect(const char ip[], int port) { }
+    virtual void connect(const char ip[], int port, int timeout) { }
     virtual void set_timeout(int duration) { }
     virtual void set_nodelay(int flag) { }
     virtual void send(const void* data, size_t data_len) { }
@@ -44,7 +43,7 @@ struct socket_object
     virtual void set_kind(uint32_t kind) { m_kind = kind; }
     virtual void set_token(uint32_t token) { m_token = token; }
     virtual void set_codec(codec_base* codec) { m_codec = codec; }
-    virtual void set_accept_callback(const std::function<void(int)> cb) { }
+    virtual void set_accept_callback(const std::function<void(uint32_t)> cb) { }
     virtual void set_connect_callback(const std::function<void(bool, const char*)> cb) { }
     virtual void set_error_callback(const std::function<void(const char*)> cb) { }
     virtual void set_package_callback(const std::function<void(slice*)> cb) { }
@@ -61,11 +60,10 @@ protected:
     uint32_t m_kind = 0;
     uint32_t m_token = 0;
     codec_base* m_codec = nullptr;
-    elink_status m_link_status = elink_status::link_init;
+    elink_status m_link_status = LINK_INIT;
 };
 
-class socket_mgr
-{
+class socket_mgr {
 public:
     socket_mgr();
     ~socket_mgr();
@@ -92,7 +90,7 @@ public:
     void close(uint32_t token);
     void set_codec(uint32_t token, codec_base* codec);
     bool get_remote_ip(uint32_t token, std::string& ip);
-    void set_accept_callback(uint32_t token, const std::function<void(int)> cb);
+    void set_accept_callback(uint32_t token, const std::function<void(uint32_t)> cb);
     void set_error_callback(uint32_t token, const std::function<void(const char*)> cb);
     void set_connect_callback(uint32_t token, const std::function<void(bool, const char*)> cb);
     void set_package_callback(uint32_t token, const std::function<void(slice*)> cb);
@@ -102,7 +100,7 @@ public:
     bool watch_connecting(socket_t fd, socket_object* object);
     bool watch_connected(socket_t fd, socket_object* object);
     bool watch_send(socket_t fd, socket_object* object, bool enable);
-    int accept_stream(uint32_t ltoken, socket_t fd, const char ip[]);
+    uint32_t accept_stream(uint32_t ltoken, socket_t fd, const char ip[]);
 
     void increase_count() { m_count++; }
     void decrease_count() { m_count--; }
@@ -133,7 +131,7 @@ private:
     bool poll_event_ctl(socket_t fd, short fevts);
 #endif
 
-    socket_object* get_object(int token) {
+    socket_object* get_object(uint32_t token) {
         auto it = m_objects.find(token);
         if (it != m_objects.end()) {
             return it->second;

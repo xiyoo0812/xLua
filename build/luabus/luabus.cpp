@@ -35,7 +35,7 @@ namespace luabus {
     }
 
     luakit::lua_table open_luabus(lua_State* L) {
-        luakit::kit_state kit_state(L);
+        luakit::kit_state kit_state(L, true);
         auto lluabus = kit_state.new_table("luabus");
         lluabus.set_function("udp", create_udp);
         lluabus.set_function("tcp", create_tcp);
@@ -46,9 +46,9 @@ namespace luabus {
         lluabus.set_function("derive_port", derive_port);
         lluabus.set_function("create_socket_mgr", create_socket_mgr);
         lluabus.new_enum("eproto_type",
-            "pb", eproto_type::proto_pb,
-            "rpc", eproto_type::proto_rpc,
-            "text", eproto_type::proto_text
+            "PB", PROTO_PB,
+            "RPC", PROTO_RPC,
+            "TEXT", PROTO_TEXT
         );
         kit_state.new_class<socket_udp>(
             "send", &socket_udp::send,
@@ -81,7 +81,6 @@ namespace luabus {
         kit_state.new_class<lua_socket_node>(
             "ip", &lua_socket_node::m_ip,
             "token", &lua_socket_node::m_token,
-            "stoken", &lua_socket_node::m_stoken,
             "call", &lua_socket_node::call,
             "close", &lua_socket_node::close,
             "call_pb", &lua_socket_node::call_pb,
@@ -94,7 +93,6 @@ namespace luabus {
             "transfer_hash", &lua_socket_node::transfer_hash,
             "forward_target", &lua_socket_node::forward_target,
             "get_route_count", &lua_socket_node::get_route_count,
-            "build_session_id", &lua_socket_node::build_session_id,
             "forward_transfer", &lua_socket_node::forward_transfer,
             "forward_master", &lua_socket_node::forward_by_group<FORWARD_MASTER>,
             "forward_broadcast", &lua_socket_node::forward_by_group<FORWARD_BROADCAST>

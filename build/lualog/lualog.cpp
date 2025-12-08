@@ -65,7 +65,7 @@ namespace logger {
         return string_view("unsuppert data type");
     }
 
-    int zformat(lua_State* L, log_level lvl, cpchar tag, cpchar trace_id, cpchar feature, int flag, sstring&& msg) {
+    int zformat(lua_State* L, log_level lvl, cpchar tag, cpchar trace_id, cpchar feature, size_t flag, sstring&& msg) {
         if (trace_id) msg = std::format("[T-{}]{}", trace_id, msg);
         if ((flag & LOG_FLAG_MONITOR) == LOG_FLAG_MONITOR) {
             lua_pushlstring(L, msg.c_str(), msg.size());
@@ -77,7 +77,7 @@ namespace logger {
     }
 
     template<size_t... integers>
-    int tformat(lua_State* L, log_level lvl, cpchar tag, cpchar trace_id, cpchar feature, int flag, cpchar vfmt, std::index_sequence<integers...>&&) {
+    int tformat(lua_State* L, log_level lvl, cpchar tag, cpchar trace_id, cpchar feature, size_t flag, cpchar vfmt, std::index_sequence<integers...>&&) {
         try {
             std::tuple args = std::make_tuple(read_args(L, flag, integers + 7)...);
             auto msg = std::vformat(vfmt, std::make_format_args(std::get<integers>(args)...));
@@ -89,7 +89,7 @@ namespace logger {
     }
 
     template<size_t... integers>
-    int fformat(lua_State* L, int flag, cpchar vfmt, std::index_sequence<integers...>&&) {
+    int fformat(lua_State* L, size_t flag, cpchar vfmt, std::index_sequence<integers...>&&) {
         try {
             std::tuple args = std::make_tuple(read_args(L, flag, integers + 2)...);
             auto msg = std::vformat(vfmt, std::make_format_args(std::get<integers>(args)...));
@@ -165,7 +165,6 @@ namespace logger {
 
         lualog.set_function("daemon", [](bool status) { s_logger->daemon(status); });
         lualog.set_function("set_max_line", [](size_t line) { s_logger->set_max_line(line); });
-        lualog.set_function("set_clean_time", [](size_t time) { s_logger->set_clean_time(time); });
         lualog.set_function("display", []() { s_agent->attach(s_logger->weak_from_this()); });
         lualog.set_function("filter", [](int lv, bool on) { s_agent->filter((log_level)lv, on); });
         lualog.set_function("is_filter", [](int lv) { return s_agent->is_filter((log_level)lv); });
@@ -177,8 +176,7 @@ namespace logger {
         lualog.set_function("ignore_suffix", [](cpchar feature, bool suffix) { s_logger->ignore_suffix(feature, suffix); });
         lualog.set_function("add_dest", [](cpchar feature) { return s_logger->add_dest(feature); });
         lualog.set_function("add_file_dest", [](cpchar feature, cpchar fname) { return s_logger->add_file_dest(feature, fname); });
-        lualog.set_function("set_dest_clean_time", [](cpchar feature, size_t time) { s_logger->set_dest_clean_time(feature, time); });
-        lualog.set_function("option", [](cpchar log_path, cpchar service, cpchar index) { s_logger->option(log_path, service, index); });
+        lualog.set_function("option", [](fspath log_path, cpchar service, cpchar index) { return s_logger->option(log_path, service, index); });
         return lualog;
     }
 }
@@ -187,5 +185,9 @@ extern "C" {
     LUALIB_API int luaopen_lualog(lua_State* L) {
         auto llog = logger::open_lualog(L);
         return llog.push_stack();
+    }
+
+    LUALIB_API void lualog_set_logger(custom_output fn) {
+        logger::s_logger->set_custom_output(fn);
     }
 }

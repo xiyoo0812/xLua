@@ -3,7 +3,6 @@
 
 lua_socket_node::lua_socket_node(uint32_t token, lua_State* L, stdsptr<socket_mgr> mgr, stdsptr<socket_router> router, eproto_type type)
         : m_token(token), m_type(type), m_mgr(mgr), m_router(router) {
-    m_stoken = m_token << 16;
     m_lvm = std::make_shared<kit_state>(L);
     m_mgr->get_remote_ip(m_token, m_ip);
     m_mgr->set_connect_callback(token, [=](bool ok, const char* reason) {
@@ -17,6 +16,7 @@ lua_socket_node::lua_socket_node(uint32_t token, lua_State* L, stdsptr<socket_mg
     });
     m_mgr->set_accept_callback(token, [=](uint32_t steam_token) {
         auto node = new lua_socket_node(steam_token, L, m_mgr, m_router, m_type);
+        node->set_codec(m_codec);
         m_lvm->object_call(this, "on_accept", nullptr, std::tie(), node);
     });
 }
@@ -56,7 +56,7 @@ int lua_socket_node::call_pb(lua_State* L) {
     if (m_codec) {
         size_t data_len = 0;
         char* data = (char*)m_codec->encode(L, 1, &data_len);
-        if (data_len <= USHRT_MAX) {
+        if (data_len > 0) {
             //发送数据
             m_mgr->send(m_token, data, data_len);
             lua_pushinteger(L, data_len);
@@ -244,10 +244,10 @@ int lua_socket_node::transfer_hash(lua_State* L, uint32_t session_id, uint32_t s
 }
 
 void lua_socket_node::on_recv(slice* slice) {
-    if (m_type == eproto_type::proto_pb) {
+    if (m_type == PROTO_PB) {
         return on_call_pb(slice);
     }
-    if (m_type == eproto_type::proto_text) {
+    if (m_type == PROTO_TEXT) {
         return on_call_data(slice);
     }
     size_t data_len;
