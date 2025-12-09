@@ -2,7 +2,7 @@
 
 #include "quanta.h"
 
-static quanta_app q_app;
+thread_local quanta_app q_app;
 
 extern "C" {
     int luaopen_lssl(lua_State* L);
@@ -30,7 +30,7 @@ extern "C" {
         luaL_requiref(L, "lstdfs", luaopen_lstdfs, 1);
     }
 
-    LUALIB_API bool init_quanta(lua_State* L, const char* fconf) {
+    LUALIB_API const char* init_quanta(lua_State* L, const char* fconf) {
         setlocale(LC_ALL, ".UTF8");
         const char* args[2]{ "quanta", fconf };
         luaL_register_quantalibs(L);

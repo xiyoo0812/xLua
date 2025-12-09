@@ -8,8 +8,8 @@ public:
     ~quanta_app();
     
     void run();
-    bool init();
     bool step();
+    const char* init();
     bool load(int argc, const char* argv[]);
     void set_signal(uint32_t n, bool b = true);
     void add_path(const char* field, const char* path);
@@ -32,6 +32,7 @@ private:
     bool m_process = true;
     uint64_t m_signal = 0;
     luakit::kit_state* m_lua = nullptr;
+    std::string m_res = "suceess";
     std::unordered_map<std::string, std::string> m_environs;
 };
 
