@@ -41,12 +41,12 @@ typedef void (*custom_output)(const char* msg, size_t len, int level);
 
 namespace logger {
     enum class log_level : uint8_t {
-        LOG_LEVEL_DEBUG = 1,
-        LOG_LEVEL_INFO,
-        LOG_LEVEL_WARN,
-        LOG_LEVEL_DUMP,
-        LOG_LEVEL_ERROR,
-        LOG_LEVEL_FATAL,
+        LOG_DEBUG = 1,
+        LOG_INFO,
+        LOG_WARN,
+        LOG_DUMP,
+        LOG_ERROR,
+        LOG_FATAL,
     };
     using enum log_level;
 
@@ -72,7 +72,7 @@ namespace logger {
 
     private:
         log_time            time_;
-        log_level           level_ = LOG_LEVEL_DEBUG;
+        log_level           level_ = LOG_DEBUG;
         sstring             msg_, feature_, tag_, prefix_, suffix_;
     }; // class log_message
     typedef std::vector<sptr<log_message>> log_messages;

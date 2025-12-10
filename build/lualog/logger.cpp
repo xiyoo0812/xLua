@@ -129,6 +129,7 @@ namespace logger {
     void log_file_base::flush(const zone_time& time) {
         if (size_ == 0) return;
         file_->write(log_buf_, size_);
+        file_->flush();
         size_ = 0;
     }
 
@@ -326,7 +327,7 @@ namespace logger {
         for (auto dest : dest_lvls_)
             dest.second->flush(time);
     }
-   
+
     void log_service::run(std::stop_token stoken) {
         std::this_thread::sleep_for(milliseconds(100));
         while (true) {
@@ -372,7 +373,7 @@ namespace logger {
         }
     }
 
-    void log_agent::attach(wptr<log_service> service) { 
+    void log_agent::attach(wptr<log_service> service) {
         service_ = service;
         if (auto lservice = service_.lock(); lservice) {
             lservice->add_agent(this);
