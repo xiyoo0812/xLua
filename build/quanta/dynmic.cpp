@@ -4,11 +4,11 @@
 #include "quanta.h"
 
 extern "C" {
-    int luaopen_lssl(lua_State* L);
     int luaopen_lbson(lua_State* L);
     int luaopen_ljson(lua_State* L);
     int luaopen_luapb(lua_State* L);
     int luaopen_lsmdb(lua_State* L);
+    int luaopen_luassl(lua_State* L);
     int luaopen_lualog(lua_State* L);
     int luaopen_luabus(lua_State* L);
     int luaopen_lcodec(lua_State* L);
@@ -18,11 +18,11 @@ extern "C" {
     int luaopen_lstdfs(lua_State* L);
 
     static void luaL_register_quantalibs(lua_State* L) {
-        luaL_requiref(L, "lssl", luaopen_lssl, 1);
         luaL_requiref(L, "lbson", luaopen_lbson, 1);
         luaL_requiref(L, "ljson", luaopen_ljson, 1);
         luaL_requiref(L, "luapb", luaopen_luapb, 1);
         luaL_requiref(L, "lsmdb", luaopen_lsmdb, 1);
+        luaL_requiref(L, "luassl", luaopen_luassl, 1);
         luaL_requiref(L, "lualog", luaopen_lualog, 1);
         luaL_requiref(L, "luabus", luaopen_luabus, 1);
         luaL_requiref(L, "lcodec", luaopen_lcodec, 1);
