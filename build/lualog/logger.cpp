@@ -193,7 +193,7 @@ namespace logger {
         log_path_ = log_path;
         zone_ = const_cast<time_zone*>(current_zone());
         service_ = std::format("{}-{}", service, index);
-        try { 
+        try {
             create_directories(log_path_);
             add_dest(service);
             //启动日志线程

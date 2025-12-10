@@ -1,8 +1,7 @@
 #define LUA_LIB
+#include <signal.h>
 
 #include "quanta.h"
-
-thread_local quanta_app q_app;
 
 extern "C" {
     int luaopen_lssl(lua_State* L);
@@ -30,16 +29,36 @@ extern "C" {
         luaL_requiref(L, "lstdfs", luaopen_lstdfs, 1);
     }
 
-    LUALIB_API const char* init_quanta(lua_State* L, const char* fconf) {
-        setlocale(LC_ALL, ".UTF8");
-        const char* args[2]{ "quanta", fconf };
-        luaL_register_quantalibs(L);
-        q_app.setup(2, args, L);
-        q_app.set_library();
-        return q_app.init();
+    static std::string LAST_ERR = "";
+
+    LUALIB_API const char* last_error() {
+        return LAST_ERR.c_str();
     }
 
-    LUALIB_API bool run_quanta() {
-        return q_app.step();
+    LUALIB_API quanta_app* init_quanta(lua_State* L, const char* fconf) {
+        LAST_ERR.clear();
+        setlocale(LC_ALL, ".UTF8");
+        luaL_register_quantalibs(L);
+        quanta_app* app = new quanta_app();
+        const char* args[2]{ "quanta", fconf };
+        if (!app->setup(2, args, L)) {
+            LAST_ERR = app->last_error();
+            delete app;
+            app = nullptr;
+        }
+        return app;
+    }
+
+    LUALIB_API bool run_quanta(quanta_app* app) {
+        return app->step();
+    }
+
+    LUALIB_API void stop_quanta(quanta_app* app) {
+        app->set_signal(SIGTERM, true);
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            if (!app->step()) break;
+        }
+        delete app;
     }
 }

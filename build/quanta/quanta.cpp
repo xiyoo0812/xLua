@@ -140,9 +140,8 @@ bool quanta_app::load(int argc, const char* argv[]) {
     return true;
 }
 
-const char* quanta_app::init() {
+bool quanta_app::init() {
     //初始化lua
-    m_res = "suceess";
     auto tid = std::this_thread::get_id();
     auto quanta = m_lua->new_table("quanta");
     quanta.set("pid", ::getpid());
@@ -163,20 +162,17 @@ const char* quanta_app::init() {
     if (sandbox) {
         if (!m_lua->run_script(std::format("require '{}'", sandbox), [&](std::string_view err) {
             exception_handler("load sandbox err: {}", err);
-            m_res = err;
-            })) return m_res.c_str();
+        })) return false;
     }
     auto entry = get_env("QUANTA_ENTRY");
     if (!entry) {
         exception_handler("load entry err: {}", "entry not found");
-        m_res = "entry not found";
-        return m_res.c_str();
+        return false;
     }
     if (!m_lua->run_script(std::format("require '{}'", entry), [&](std::string_view err) {
         exception_handler("load entry {} err: {}", entry, err);
-        m_res = err;
-        })) return m_res.c_str();
-    return m_res.c_str();
+    })) return false;
+    return true;
 }
 
 void quanta_app::run() {
