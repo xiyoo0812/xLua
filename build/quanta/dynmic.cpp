@@ -32,19 +32,18 @@ extern "C" {
         luaL_requiref(L, "lworker", luaopen_lworker, 1);
     }
 
-    static std::string LAST_ERR = "";
+    static sstring LAST_ERR = "";
 
-    LUALIB_API const char* last_error() {
+    LUALIB_API cpchar last_error() {
         return LAST_ERR.c_str();
     }
 
-    LUALIB_API quanta_app* init_quanta(lua_State* L, const char* fconf) {
+    LUALIB_API quanta_app* init_quanta(lua_State* L, int argc, cpchar argv[]) {
         LAST_ERR.clear();
         setlocale(LC_ALL, ".UTF8");
         luaL_register_quantalibs(L);
         quanta_app* app = new quanta_app();
-        const char* args[2]{ "quanta", fconf };
-        if (!app->setup(2, args, L)) {
+        if (!app->setup(argc, argv, L)) {
             LAST_ERR = app->last_error();
             delete app;
             app = nullptr;

@@ -23,10 +23,6 @@ using namespace luakit;
 using namespace std::chrono;
 using namespace std::filesystem;
 
-using cpchar    = const char*;
-using sstring   = std::string;
-using vstring   = std::string_view;
-using cstring   = const std::string;
 using fspath    = std::filesystem::path;
 
 template <class T>
