@@ -42,7 +42,7 @@ uint32_t socket_router::choose_master(uint32_t service_id){
 
 void socket_router::do_forward_target(uint32_t token, router_header* header, pbyte data, size_t data_len) {
     uint32_t target_id = header->target_id;
-    uint8_t service_id = (target_id >> 16) && 0xff;
+    uint8_t service_id = (target_id >> 16) & 0xff;
     auto& services = m_services[service_id];
     auto& nodes = services.nodes;
     auto it = std::lower_bound(nodes.begin(), nodes.end(), target_id, [](service_node& node, uint32_t id) { return node.id < id; });
@@ -129,8 +129,9 @@ uint32_t socket_router::get_route_count() {
 
 void socket_router::on_forward_error(uint32_t token, router_header* header, pbyte data, size_t data_len) {
     if (header->session_id > 0) {
+        header->type = FORWARD_SELF;
         header->flag = (uint8_t)FLAG_ERR;
-        sendv_item items[] = { { &header, sizeof(router_header)}, { data, data_len } };
+        sendv_item items[] = { { header, sizeof(router_header)}, { data, data_len } };
         m_mgr->sendv(token, items, _countof(items));
     }
 }
@@ -141,7 +142,7 @@ void socket_router::on_forward_broadcast(uint32_t token, router_header* header, 
         auto data = m_codec->encode(&data_len, 5, 0, "on_forward_broadcast", true, 0, broadcast_num);
         header->flag = (uint8_t)FLAG_RES;
         header->len = data_len + sizeof(router_header);
-        sendv_item items[] = { { &header, sizeof(router_header)}, { data, data_len } };
+        sendv_item items[] = { { header, sizeof(router_header)}, { data, data_len } };
         m_mgr->sendv(token, items, _countof(items));
     }
 }

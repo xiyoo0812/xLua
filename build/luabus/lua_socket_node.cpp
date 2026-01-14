@@ -82,22 +82,26 @@ void lua_socket_node::on_call_text(slice* slice) {
 
 void lua_socket_node::on_call_pb(slice* slice) {
     relay_header* header = (relay_header*)slice->peek(sizeof(relay_header));
-    switch (header->type) {
-    case RELAY_SELF:
+    if (m_relay) {
+        switch (header->type) {
+        case RELAY_SELF:
+            m_lvm->object_call(this, "on_call_pb", nullptr, m_codec, std::tie());
+            break;
+        case RELAY_BROADCAST:
+            m_relay->do_forward_broadcast(slice->head(), slice->size());
+            break;
+        case RELAY_GROUP:
+            m_relay->do_forward_group(header, slice->head(), slice->size());
+            break;
+        case RELAY_CLIENT:
+            m_relay->do_forward_client(header, slice->head(), slice->size());
+            break;
+        case RELAY_SERVICE:
+            m_relay->do_forward_service(header, m_node_id, slice->head(), slice->size());
+            break;
+        }
+    } else {
         m_lvm->object_call(this, "on_call_pb", nullptr, m_codec, std::tie());
-        break;
-    case RELAY_BROADCAST:
-        m_relay->do_forward_broadcast(slice->head(), slice->size());
-        break;
-    case RELAY_GROUP:
-        m_relay->do_forward_group(header, slice->head(), slice->size());
-        break;
-    case RELAY_CLIENT:
-        m_relay->do_forward_client(header, slice->head(), slice->size());
-        break;
-    case RELAY_SERVICE:
-        m_relay->do_forward_service(header, m_node_id, slice->head(), slice->size());
-        break;
     }
 }
 

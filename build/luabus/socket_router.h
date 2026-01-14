@@ -42,7 +42,7 @@ struct service_list {
 class socket_router
 {
 public:
-    socket_router(stdsptr<socket_mgr>& mgr, codec_base* codec) : m_mgr(mgr), m_codec(codec){ }
+    socket_router(stdsptr<socket_mgr>& mgr, codec_base* codec) : m_codec(codec), m_mgr(mgr) { }
 
     uint32_t get_route_count();
     uint32_t choose_master(uint32_t service_id);
