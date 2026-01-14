@@ -19,7 +19,10 @@ extern "C" {
     #include "lauxlib.h"
 }
 
+using pchar     = char*;
+using pbyte     = uint8_t*;
 using cpchar    = const char*;
+using upchar    = unsigned char*;
 using cpbyte    = const uint8_t*;
 using sstring   = std::string;
 using vstring   = std::string_view;
