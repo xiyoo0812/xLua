@@ -88,7 +88,7 @@ void lua_socket_node::on_call_pb(slice* slice) {
             m_lvm->object_call(this, "on_call_pb", nullptr, m_codec, std::tie());
             break;
         case RELAY_BROADCAST:
-            m_relay->do_forward_broadcast(slice->head(), slice->size());
+            m_relay->do_forward_broadcast(header, slice->head(), slice->size());
             break;
         case RELAY_GROUP:
             m_relay->do_forward_group(header, slice->head(), slice->size());

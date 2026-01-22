@@ -36,6 +36,7 @@ public:
     int broadgroup(lua_State* L, codec_base* codec);
     void set_codec(uint32_t token, codec_base* codec);
 
+    std::vector<uint32_t> query_servers(uint32_t client_id);
 
 private:
     luabuf m_buf;

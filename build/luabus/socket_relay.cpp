@@ -34,6 +34,16 @@ void socket_relay::map_group(uint32_t group_id, uint32_t client_id, bool enter) 
     }
 }
 
+std::vector<uint32_t> socket_relay::query_servers(uint32_t client_id) {
+    std::vector<uint32_t> servers;
+    if (auto it = m_clients.find(client_id); it != m_clients.end()) {
+        for (auto& [_, unit] : it->second.m_services) {
+            servers.push_back(unit.server_id);
+        }
+    }
+    return servers;
+}
+
 void socket_relay::map_server(uint32_t client_id, uint32_t server_id, uint32_t token) {
     auto service_id = (server_id >> 16) & 0xff;
     if (auto it = m_clients.find(client_id); it != m_clients.end()) {
@@ -47,13 +57,16 @@ void socket_relay::map_server(uint32_t client_id, uint32_t server_id, uint32_t t
 
 bool socket_relay::check_service(uint32_t server_id, uint32_t client_id) {
      if (auto it = m_clients.find(client_id); it != m_clients.end()) {
+        auto& services = it->second.m_services;
         auto service_id = (server_id >> 16) & 0xff;
-        return it->second.m_services[service_id].server_id == server_id;
+        if (auto its = services.find(service_id); its != services.end()) {
+            return its->second.server_id == server_id;
+        }
      }
      return false;
 }
 
-void socket_relay::do_forward_broadcast(pbyte data, size_t data_len) {
+void socket_relay::do_forward_broadcast(relay_header* header, pbyte data, size_t data_len) {
     for (auto& [_, unit] : m_clients) {
         m_mgr->send(unit.token, data, data_len);
     }
@@ -66,14 +79,18 @@ void socket_relay::do_forward_client(relay_header* header, pbyte data, size_t da
 }
 
 void socket_relay::do_forward_service(relay_header* header, uint32_t client_id, pbyte data, size_t data_len) {
-    if (auto it = m_clients.find(header->target_id); it != m_clients.end()) {
+    if (auto it = m_clients.find(client_id); it != m_clients.end()) {
         auto unit = it->second;
-        uint8_t service_id = header->target_id;
-        auto stoken = unit.m_services[service_id].token;
         if (unit.crc8 != header->crc8) {
-            if (stoken > 0 && m_mgr->send(stoken, data, data_len)) {
-                unit.crc8 = header->crc8;
-                return;
+            auto& services = it->second.m_services;
+            if (auto its = services.find(header->target_id); its != services.end()) {
+                if (auto stoken = its->second.token; stoken > 0) {
+                    header->target_id = client_id;
+                    if (m_mgr->send(stoken, data, data_len)) {
+                        unit.crc8 = header->crc8;
+                        return;
+                    }
+                }
             }
             header->code = CODE_UNREACH;
         } else {
@@ -99,12 +116,14 @@ uint8_t socket_relay::do_forward_relay(router_header* header, pbyte data, size_t
     if (it == m_clients.end()) {
         return m_relay_service_id;
     }
-    auto sunit = it->second.m_services[header->service_id];
-    if (sunit.token == 0) {
-        return m_relay_service_id;
+    auto& services = it->second.m_services;
+    if (auto its = services.find(header->service_id); its != services.end()) {
+        if (auto token = its->second.token; token > 0) {
+            header->type = FORWARD_SELF;
+            sendv_item items[] = { {header, sizeof(router_header)}, {data, data_len} };
+            m_mgr->send(token, data, data_len);
+            return 0;
+        }
     }
-    header->type = FORWARD_SELF;
-    sendv_item items[] = { {header, sizeof(router_header)}, {data, data_len} };
-    m_mgr->send(sunit.token, data, data_len);
-    return 0;
+    return m_relay_service_id;
 }

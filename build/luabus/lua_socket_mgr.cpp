@@ -66,6 +66,10 @@ void lua_socket_mgr::map_client(uint32_t client_id, int32_t token) {
     m_relay->map_client(client_id, token);
 }
 
+std::vector<uint32_t> lua_socket_mgr::query_servers(uint32_t client_id){
+    return m_relay->query_servers(client_id);
+}
+
 void lua_socket_mgr::map_group(uint32_t group_id, uint32_t client_id, bool enter) {
     m_relay->map_group(group_id, client_id, enter);
 }

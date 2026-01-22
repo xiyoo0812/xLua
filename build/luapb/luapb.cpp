@@ -115,9 +115,9 @@ namespace luapb {
             //header
             pb_header* header = (pb_header*)m_slice->erase(sizeof(pb_header));
             lua_pushinteger(L, header->session_id);
+            lua_pushinteger(L, header->target_id);
             lua_pushinteger(L, header->cmd_id);
             lua_pushinteger(L, header->flag);
-            lua_pushinteger(L, header->type);
             lua_pushinteger(L, header->code);
             //cmd_id
             pb_message* msg = pbmsg_from_cmdid(header->cmd_id);

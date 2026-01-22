@@ -45,7 +45,7 @@ struct relay_service {
 struct relay_unit {
     uint8_t crc8 = 0;
     uint32_t token = 0;
-    std::array<relay_service, UCHAR_MAX> m_services;
+    std::unordered_map<uint8_t, relay_service> m_services;
 };
 
 class socket_relay
@@ -56,12 +56,13 @@ public:
     void map_client(uint32_t client_id, uint32_t token);
     void map_group(uint32_t group_id, uint32_t client_id, bool enter);
     void map_server(uint32_t client_id, uint32_t server_id, uint32_t token);
-    void do_forward_broadcast(pbyte data, size_t data_len);
     void do_forward_group(relay_header* header, pbyte data, size_t data_len);
     void do_forward_client(relay_header* header, pbyte data, size_t data_len);
+    void do_forward_broadcast(relay_header* header, pbyte data, size_t data_len);
     void do_forward_service(relay_header* header, uint32_t client_id, pbyte data, size_t data_len);
     uint8_t do_forward_relay(router_header* header, pbyte data, size_t data_len);
 
+    std::vector<uint32_t> query_servers(uint32_t client_id);
     bool check_service(uint32_t server_id, uint32_t client_id);
     void set_relay_service(uint8_t id) { m_relay_service_id = id; }
 
