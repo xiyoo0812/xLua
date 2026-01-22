@@ -75,11 +75,6 @@ set (LJSON_SRC ljson/ljson.cpp ljson/yyjson.c)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LJSON_SRC})
 #end ljson
 
-#begin lbson
-set (LBSON_SRC lbson/lbson.cpp)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LBSON_SRC})
-#end lbson
-
 #begin lcodec
 set (LCODEC_SRC lcodec/lcodec.cpp)
 set (THIRDPART_SRC ${THIRDPART_SRC} ${LCODEC_SRC})
