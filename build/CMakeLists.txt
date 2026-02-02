@@ -44,15 +44,9 @@ set ( LUA_IDSIZE 120 CACHE STRING "gives the maximum size for the description of
 configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
 # common headers
-list(APPEND THIRDPART_INC  luakit)
-list(APPEND THIRDPART_INC  lualog)
+list(APPEND THIRDPART_INC luakit)
 
 add_definitions(-DFMT_HEADER_ONLY)
-add_definitions(-DWOLFSSL_LIB)
-add_definitions(-DWOLFSSL_SRTP)
-add_definitions(-DWOLFSSL_NO_SOCK)
-add_definitions(-DWOLFSSL_USER_IO)
-add_definitions(-DWOLFSSL_USER_SETTINGS)
 
 if (MSVC)
     add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
@@ -106,17 +100,11 @@ set (THIRDPART_SRC ${THIRDPART_SRC} ${LUALOG_SRC})
 #end lualog
 
 #begin lss
-set(SSL_PATH luassl/)
-file(GLOB_RECURSE LSSL_SRC ${SSL_PATH}ssl/*.cpp ${SSL_PATH}ssl/*.c ${SSL_PATH}wolfcrypt/src/*.c ${SSL_PATH}src/*.c)
-file(GLOB_RECURSE LSSL_SRC1 ${SSL_PATH}src/x509_str.c ${SSL_PATH}src/x509.c ${SSL_PATH}src/conf.c ${SSL_PATH}src/bio.c ${SSL_PATH}src/pk.c)
-file(GLOB_RECURSE LSSL_SRC2 ${SSL_PATH}src/ssl_bn.c ${SSL_PATH}src/ssl_misc.c ${SSL_PATH}src/ssl_asn1.c ${SSL_PATH}src/ssl_crypto.c ${SSL_PATH}src/ssl_certman.c)
-file(GLOB_RECURSE LSSL_SRC3 ${SSL_PATH}wolfcrypt/src/evp.c ${SSL_PATH}wolfcrypt/src/misc.c)
-list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC1})
-list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC2})
-list(REMOVE_ITEM LSSL_SRC ${LSSL_SRC3})
-list(APPEND THIRDPART_INC  luassl)
-set (THIRDPART_SRC ${THIRDPART_SRC} ${LSSL_SRC})
-#end luassl
+set(TLS_PATH luatls/)
+file(GLOB_RECURSE LTLS_SRC ${TLS_PATH}*.cpp ${TLS_PATH}library/*.c ${TLS_PATH}extend/*.c)
+list(APPEND THIRDPART_INC luatls/include)
+set (THIRDPART_SRC ${THIRDPART_SRC} ${LTLS_SRC})
+#end luatls
 
 #begin lworker
 file(GLOB_RECURSE LWORKER_SRC lworker.cpp)
@@ -245,6 +233,7 @@ endif()
 if ( WIN32 AND NOT CYGWIN )
     target_link_libraries(xlua
         ws2_32
+        bcrypt
         ${THIRDPART_LIB} 
     )
 else ( )
