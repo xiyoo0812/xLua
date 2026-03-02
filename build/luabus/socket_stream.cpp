@@ -423,18 +423,17 @@ void socket_stream::dispatch_package() {
         if (package_size == 0) break;
         // 数据回调
         slice->attach(data, package_size);
-        m_package_cb(slice);
-        if (!m_codec) break;
-        // 数据包解析失败
-        if (m_codec->failed()) {
-            on_error(m_codec->err());
+        try {
+            m_package_cb(slice);
+        } catch(const std::length_error&) {
+            m_recv_buffer->pop_size(m_codec->get_packet_len());
+            break;
+        } catch(const std::exception& e) {
+            on_error(e.what());
             break;
         }
-        size_t read_size = m_codec->get_packet_len();
-        // 数据包还没有收完整
-        if (read_size == 0) break;
         // 接收缓冲读游标调整
-        m_recv_buffer->pop_size(read_size);
+        m_recv_buffer->pop_size(m_codec->get_packet_len());
         m_last_recv_time = luakit::steady_ms();
         // 防止单个连接处理太久，不能大于100ms
         if (m_last_recv_time - now > 100) break;
